@@ -1,0 +1,93 @@
+.plate-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin: 1rem auto 2rem;
+}
+
+.plate-group {
+  background: rgba(255, 250, 242, 0.92);
+  border: 1px solid rgba(220, 205, 191, 0.85);
+  border-radius: 20px;
+  box-shadow: 0 14px 30px rgba(31, 43, 45, 0.1);
+  padding: 1.2rem;
+}
+
+.plate-group h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.plate-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.plate-list li + li {
+  margin-top: 0.55rem;
+}
+
+.plate-list a {
+  display: block;
+  padding: 0.7rem 0.85rem;
+  text-decoration: none;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-weight: 600;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.plate-list a:hover,
+.plate-list a:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(141, 47, 63, 0.34);
+  box-shadow: 0 10px 20px rgba(31, 43, 45, 0.08);
+}
+
+@media (max-width: 860px) {
+  .plate-groups {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .plate-group {
+    padding: 1rem;
+  }
+
+  .plate-list a {
+    padding: 0.65rem 0.75rem;
+  }
+}
+
+.plate-entry {
+  margin: 1rem auto 2rem;
+  display: grid;
+  gap: 1.2rem;
+}
+
+.plate-image {
+  width: 100%;
+  max-width: 520px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
+
+.plate-entry section h2 {
+  font-size: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.plate-entry ul,
+.plate-entry ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.plate-entry li + li {
+  margin-top: 0.3rem;
+}
