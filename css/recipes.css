@@ -1,1 +1,226 @@
-/* recipes specific styles */
+/* recipe entry styles */
+.recipe-page,
+body {
+  /* inherits global site styling from styles.css */
+}
+
+.meta {
+  display: inline-block;
+  margin: 0 0 1.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(141, 47, 63, 0.08);
+  color: var(--accent-deep);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+main,
+.recipe-wrap {
+  width: min(calc(100% - 2rem), 860px);
+  margin: 0 auto 2.5rem;
+}
+
+body > h1,
+body > .meta,
+body > h2,
+body > ul,
+body > p,
+body > .step {
+  width: min(calc(100% - 2rem), 860px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body > h1 {
+  margin-top: 2rem;
+  margin-bottom: 0.35rem;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+body > h2 {
+  margin-top: 2rem;
+  margin-bottom: 0.9rem;
+  font-size: 1.2rem;
+  line-height: 1.1;
+  color: var(--accent-deep);
+}
+
+body > ul,
+body > ol {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-left: 1.2rem;
+}
+
+body > ul {
+  background: rgba(255, 250, 242, 0.9);
+  border: 1px solid rgba(220, 205, 191, 0.85);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: 1rem 1.2rem 1rem 2.1rem;
+}
+
+body > ul li + li {
+  margin-top: 0.45rem;
+}
+
+.step {
+  background: rgba(255, 250, 242, 0.94);
+  border: 1px solid rgba(220, 205, 191, 0.9);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(31, 43, 45, 0.08);
+  padding: 1rem 1.1rem;
+  margin-bottom: 0.8rem !important;
+  line-height: 1.55;
+  position: relative;
+}
+
+.step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+}
+
+h2 + .step {
+  margin-top: 0.2rem;
+}
+
+body > p {
+  background: rgba(255, 250, 242, 0.72);
+  border: 1px solid rgba(220, 205, 191, 0.72);
+  border-radius: 16px;
+  padding: 0.95rem 1rem;
+  box-shadow: 0 8px 20px rgba(31, 43, 45, 0.05);
+}
+
+body > p br + br {
+  display: block;
+  content: "";
+  margin-top: 0.45rem;
+}
+
+/* recipe index styles to match plating index */
+.recipe-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin: 1rem auto 2rem;
+}
+
+.recipe-group {
+  background: rgba(255, 250, 242, 0.92);
+  border: 1px solid rgba(220, 205, 191, 0.85);
+  border-radius: 20px;
+  box-shadow: 0 14px 30px rgba(31, 43, 45, 0.1);
+  padding: 1.2rem;
+}
+
+.recipe-group h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.recipe-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recipe-list li + li {
+  margin-top: 0.55rem;
+}
+
+.recipe-list a {
+  display: block;
+  padding: 0.7rem 0.85rem;
+  text-decoration: none;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-weight: 600;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.recipe-list a:hover,
+.recipe-list a:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(141, 47, 63, 0.34);
+  box-shadow: 0 10px 20px rgba(31, 43, 45, 0.08);
+}
+
+a {
+  color: var(--accent-deep);
+}
+
+a:hover,
+a:focus-visible {
+  color: var(--accent);
+}
+
+strong {
+  color: var(--accent-deep);
+}
+
+@media (max-width: 860px) {
+  .recipe-groups {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  main,
+  .recipe-wrap,
+  body > h1,
+  body > .meta,
+  body > h2,
+  body > ul,
+  body > p,
+  body > .step {
+    width: min(calc(100% - 1.15rem), 860px);
+  }
+
+  body > h1 {
+    margin-top: 1.4rem;
+    font-size: 2rem;
+  }
+
+  body > h2 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 1.08rem;
+  }
+
+  body > ul {
+    padding: 0.9rem 1rem 0.9rem 1.8rem;
+    border-radius: 16px;
+  }
+
+  .step,
+  body > p,
+  .recipe-group {
+    padding: 0.9rem 0.9rem 0.9rem 1rem;
+    border-radius: 15px;
+  }
+
+  .step::before {
+    top: 12px;
+    bottom: 12px;
+  }
+
+  .recipe-list a {
+    padding: 0.65rem 0.75rem;
+  }
+}
