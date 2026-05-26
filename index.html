@@ -3,45 +3,38 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <title>The Sharkuterie Board</title>
-  <meta
-    name="description"
-    content="The Sharkuterie Board — kitchen logbook and recipe portal for plating, prep, recipes and mistakes."
-  />
+
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/dishes.css" />
 </head>
+
 <body>
-  <header class="site-header">
-    <div class="header-inner">
-      <p class="eyebrow">Kitchen logbook / recipe portal</p>
-      <h1>The Sharkuterie Board</h1>
-    </div>
-  </header>
-
-  <main>
-    <section class="category-grid" aria-label="Site sections">
-      <a class="category-card plating" href="plating/index.html">
-        <span class="card-icon" aria-hidden="true">🍽️</span>
-        <h2>Plating</h2>
-      </a>
-
-      <a class="category-card prep" href="prep/index.html">
-        <span class="card-icon" aria-hidden="true">🔪</span>
-        <h2>Prep</h2>
-     </a>
-
-      <a class="category-card recipes" href="recipes/index.html">
-        <span class="card-icon" aria-hidden="true">📒</span>
-        <h2>Recipes</h2>
-      </a>
-
-      <a class="category-card lessons" href="lessons/index.html">
-        <span class="card-icon" aria-hidden="true">🧠</span>
-        <h2>Mistakes</h2>
-      </a>
+  <main class="dish-board minimal-board">
+    <section class="dish-search-panel minimal-search" aria-label="Dish search">
+      <input
+        id="dish-search"
+        type="search"
+        placeholder="Search"
+        autocomplete="off"
+        autofocus
+      />
+      <p id="dish-count" class="dish-count" hidden></p>
     </section>
+
+    <section
+      id="dish-list"
+      class="dish-list"
+      aria-label="Dish list"
+      hidden
+    ></section>
+
+    <p id="no-results" class="no-results" hidden>
+      No matching dishes found.
+    </p>
   </main>
 
-  <script src="js/shared.js"></script>
+  <script src="js/dishes.js"></script>
 </body>
 </html>
