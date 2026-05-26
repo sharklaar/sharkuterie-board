@@ -11,6 +11,10 @@ const dishFiles = [
   "dishes/tempura-courgette.html",
   "dishes/bbq-sauce.html",
   "dishes/hummus.html",
+  "dishes/crispy-chilli-oil.html",
+  "dishes/scallops.html",
+  "dishes/chicken-liver-parfait.html",
+  "dishes/asparagus-starter.html",
 ];
 
 const dishList = document.getElementById("dish-list");
