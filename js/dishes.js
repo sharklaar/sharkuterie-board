@@ -9,6 +9,8 @@ const dishFiles = [
   "dishes/chimichurri.html",
   "dishes/pan-tumaca.html",
   "dishes/tempura-courgette.html",
+  "dishes/bbq-sauce.html",
+  "dishes/hummus.html",
 ];
 
 const dishList = document.getElementById("dish-list");
