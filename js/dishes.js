@@ -16,6 +16,9 @@ const dishFiles = [
   "dishes/chicken-liver-parfait.html",
   "dishes/asparagus-starter.html",
   "dishes/trio-of-nibbles.html",
+  "dishes/salsa-verde.html",
+  "dishes/toastie-mix.html",
+  "dishes/wild-garlic-pesto.html"
 ];
 
 const dishList = document.getElementById("dish-list");
