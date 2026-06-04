@@ -18,7 +18,8 @@ const dishFiles = [
   "dishes/trio-of-nibbles.html",
   "dishes/salsa-verde.html",
   "dishes/toastie-mix.html",
-  "dishes/wild-garlic-pesto.html"
+  "dishes/wild-garlic-pesto.html",
+  "dishes/rockefeller.html"
 ];
 
 const dishList = document.getElementById("dish-list");
