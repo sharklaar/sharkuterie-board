@@ -1,0 +1,28 @@
+<article
+  class="dish-card"
+  data-title="Red Pepper Tart"
+  data-ingredients="red peppers double cream egg yolks garlic salt pepper"
+  data-tags="tart red pepper"
+>
+  <button class="dish-toggle" type="button">
+    <span>
+      <strong>Red Pepper Tart</strong><br />
+      <span class="dish-meta">Tart · Red Pepper</span>
+    </span>
+  </button>
+
+  <div class="dish-content">
+
+<section class="dish-section">
+  <h3>Ingredients</h3>
+  <ul>
+    <li>12 Roasted red peppers, peeled and de-seeded</li>
+    <li>¾ pint Double cream (~425ml)</li>
+    <li>18 Egg yolks</li>
+    <li>3 cloves Garlic</li>
+    <li>Salt and pepper</li>
+  </ul>
+</section>
+
+  </div>
+</article>

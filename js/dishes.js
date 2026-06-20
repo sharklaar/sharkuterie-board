@@ -19,7 +19,27 @@ const dishFiles = [
   "dishes/salsa-verde.html",
   "dishes/toastie-mix.html",
   "dishes/wild-garlic-pesto.html",
-  "dishes/rockefeller.html"
+  "dishes/rockefeller.html",
+  "dishes/pasta-bib.html",
+"dishes/parsley-sauce.html",
+"dishes/parsley-and-artichoke-salad.html",
+"dishes/pickled-endive.html",
+"dishes/parsley-salad.html",
+"dishes/parmesan-beignets.html",
+"dishes/parmesan-biscuits.html",
+"dishes/pickled-vegetable-relish.html",
+"dishes/onion-confit.html",
+"dishes/onions-monegasque.html",
+"dishes/nicoise.html",
+"dishes/mustard-dressing.html",
+"dishes/mushrooms-a-la-grecque.html",
+"dishes/marinated-courgettes.html",
+"dishes/marinated-baby-artichokes.html",
+"dishes/messine-sauce.html",
+"dishes/lobster-stock.html",
+"dishes/lime-ginger-and-coriander-butter.html",
+"dishes/lemon-and-basil-risotto.html",
+"dishes/mayonnaise.html"
 ];
 
 const dishList = document.getElementById("dish-list");
@@ -33,10 +53,6 @@ async function loadDishes() {
   );
 
   dishList.innerHTML = responses.join("\n");
-
-  document.querySelectorAll(".dish-card").forEach(card => {
-  card.hidden = true;
-});
 
   initialiseAccordions();
   initialiseSearch();
@@ -69,18 +85,17 @@ function initialiseSearch() {
     const query = searchInput.value.trim().toLowerCase();
     const cards = document.querySelectorAll(".dish-card");
 
-    if (query.length < 3) {
-      dishList.hidden = true;
-      noResults.hidden = true;
-      dishCount.hidden = true;
+if (query.length === 0) {
+  cards.forEach(card => {
+    card.hidden = false;
+  });
 
-      cards.forEach(card => {
-        card.hidden = true;
-        card.classList.remove("is-open");
-      });
+  dishCount.textContent =
+    `${cards.length} dish${cards.length === 1 ? "" : "es"}`;
 
-      return;
-    }
+  noResults.hidden = true;
+  return;
+}
 
     dishList.hidden = false;
     dishCount.hidden = false;
