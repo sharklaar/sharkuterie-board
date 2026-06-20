@@ -20,7 +20,6 @@ const dishFiles = [
   "dishes/toastie-mix.html",
   "dishes/wild-garlic-pesto.html",
   "dishes/rockefeller.html",
-  "dishes/pasta-bib.html",
 "dishes/parsley-sauce.html",
 "dishes/parsley-and-artichoke-salad.html",
 "dishes/pickled-endive.html",
