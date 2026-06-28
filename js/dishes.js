@@ -39,7 +39,8 @@ const dishFiles = [
 "dishes/lime-ginger-and-coriander-butter.html",
 "dishes/lemon-and-basil-risotto.html",
 "dishes/mayonnaise.html",
-"dishes/asparagus-soup.html"
+"dishes/asparagus-soup.html",
+"dishes/mushroom-parfait.html"
 ];
 
 const dishList = document.getElementById("dish-list");
