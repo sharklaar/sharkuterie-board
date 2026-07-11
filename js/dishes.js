@@ -40,6 +40,7 @@ const dishFiles = [
 "dishes/lemon-and-basil-risotto.html",
 "dishes/mayonnaise.html",
 "dishes/asparagus-soup.html",
+"dishes/katsu-curry.html",
 ];
 
 const dishList = document.getElementById("dish-list");
