@@ -41,7 +41,8 @@ const dishFiles = [
 "dishes/mayonnaise.html",
 "dishes/asparagus-soup.html",
 "dishes/katsu-curry.html",
-"dishes/chicken-pie.html"
+"dishes/chicken-pie.html",
+"dishes/lime-pickle.html"
 ];
 
 const dishList = document.getElementById("dish-list");
