@@ -6,5 +6,13 @@
   "assets": {
     "directory": ".",
     "binding": "ASSETS"
-  }
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kitchen-ops",
+      "database_id": "2bb920cd-af92-404a-8699-004ca4fc65c1"
+    }
+  ]
 }
