@@ -2,10 +2,12 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/recipes/test-recipe") {
+    if (url.pathname.startsWith("/api/recipes/")) {
+      const slug = url.pathname.replace("/api/recipes/", "");
+
       const recipe = await env.DB
         .prepare("SELECT * FROM recipes WHERE slug = ?")
-        .bind("test-recipe")
+        .bind(slug)
         .first();
 
       if (!recipe) {
