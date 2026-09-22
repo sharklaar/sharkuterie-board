@@ -2,6 +2,28 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    if (url.pathname === "/api/recipes") {
+  const recipes = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        name,
+        slug,
+        description,
+        serves,
+        heat_level,
+        total_time_minutes,
+        image_path
+      FROM recipes
+      ORDER BY name
+    `)
+    .all();
+
+  return Response.json({
+    recipes: recipes.results
+  });
+}
+
     if (url.pathname.startsWith("/api/recipes/")) {
       const slug = url.pathname.replace("/api/recipes/", "");
 
