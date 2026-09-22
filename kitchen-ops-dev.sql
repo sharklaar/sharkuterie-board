@@ -1,0 +1,13 @@
+PRAGMA defer_foreign_keys=TRUE;
+CREATE TABLE recipes (     id INTEGER PRIMARY KEY AUTOINCREMENT,     name TEXT NOT NULL,     slug TEXT NOT NULL UNIQUE,     description TEXT,     serves TEXT,     heat_level REAL,     total_time_minutes INTEGER,     image_path TEXT,     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP );
+INSERT INTO "recipes" ("id","name","slug","description","serves","heat_level","total_time_minutes","image_path","created_at","updated_at") VALUES(1,'Test recipe','test-recipe','description of test','3',8,90,NULL,'2026-09-22 20:22:23','2026-09-22 20:22:23');
+CREATE TABLE ingredients (     id INTEGER PRIMARY KEY AUTOINCREMENT,     recipe_id INTEGER NOT NULL,     quantity REAL,     unit TEXT,     name TEXT NOT NULL,     notes TEXT,     sort_order INTEGER NOT NULL,      FOREIGN KEY (recipe_id)         REFERENCES recipes(id)         ON DELETE CASCADE );
+INSERT INTO "ingredients" ("id","recipe_id","quantity","unit","name","notes","sort_order") VALUES(1,1,500,'g','potatoes','boiled',1);
+INSERT INTO "ingredients" ("id","recipe_id","quantity","unit","name","notes","sort_order") VALUES(2,1,200,'ml','water',NULL,2);
+CREATE TABLE steps (     id INTEGER PRIMARY KEY AUTOINCREMENT,     recipe_id INTEGER NOT NULL,     sort_order INTEGER NOT NULL,      time_offset_minutes INTEGER,     title TEXT,     instruction TEXT NOT NULL,     why TEXT,      FOREIGN KEY (recipe_id)         REFERENCES recipes(id)         ON DELETE CASCADE );
+INSERT INTO "steps" ("id","recipe_id","sort_order","time_offset_minutes","title","instruction","why") VALUES(1,1,1,0,'Prep potatoes','peel and cut into even cubes','they will cook consistently');
+INSERT INTO "steps" ("id","recipe_id","sort_order","time_offset_minutes","title","instruction","why") VALUES(2,1,2,10,'Cook potatoes','boil from cold seasoned water',NULL);
+DELETE FROM sqlite_sequence;
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('recipes',1);
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('ingredients',2);
+INSERT INTO "sqlite_sequence" ("name","seq") VALUES('steps',2);
