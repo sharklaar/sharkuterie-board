@@ -2,10 +2,14 @@ var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 // src/index.js
+function makeSlug(name) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+__name(makeSlug, "makeSlug");
 var src_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/recipes") {
+    if (url.pathname === "/api/recipes" && request.method === "GET") {
       const recipes = await env.DB.prepare(`
       SELECT
         id,
@@ -23,7 +27,7 @@ var src_default = {
         recipes: recipes.results
       });
     }
-    if (url.pathname.startsWith("/api/recipes/")) {
+    if (url.pathname.startsWith("/api/recipes/") && request.method === "GET") {
       const slug = url.pathname.replace("/api/recipes/", "");
       const recipe = await env.DB.prepare("SELECT * FROM recipes WHERE slug = ?").bind(slug).first();
       if (!recipe) {
@@ -49,6 +53,45 @@ var src_default = {
         ingredients: ingredients.results,
         steps: steps.results
       });
+    }
+    if (url.pathname === "/api/recipes" && request.method === "POST") {
+      const body = await request.json();
+      const name = body.name?.trim();
+      if (!name) {
+        return Response.json(
+          { error: "Recipe name is required" },
+          { status: 400 }
+        );
+      }
+      const slug = makeSlug(name);
+      try {
+        const recipe = await env.DB.prepare(`
+        INSERT INTO recipes (
+          name,
+          slug,
+          description,
+          serves,
+          heat_level,
+          total_time_minutes
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        RETURNING *
+      `).bind(
+          name,
+          slug,
+          body.description || null,
+          body.serves || null,
+          body.heat_level ?? null,
+          body.total_time_minutes ?? null
+        ).first();
+        return Response.json(recipe, { status: 201 });
+      } catch (error) {
+        console.error(error);
+        return Response.json(
+          { error: "Could not create recipe" },
+          { status: 500 }
+        );
+      }
     }
     return env.ASSETS.fetch(request);
   }
