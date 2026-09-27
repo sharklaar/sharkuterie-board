@@ -51,16 +51,128 @@ const searchInput = document.getElementById("dish-search");
 const dishCount = document.getElementById("dish-count");
 const noResults = document.getElementById("no-results");
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 async function loadDishes() {
+  // Existing static dishes
   const responses = await Promise.all(
     dishFiles.map(file => fetch(file).then(res => res.text()))
   );
 
-  dishList.innerHTML = responses.join("\n");
+  // New database-backed dishes
+  const apiResponse = await fetch("/api/recipes");
+  const data = await apiResponse.json();
+
+const databaseDishes = data.recipes.map(recipe => `
+  <article
+    class="dish-card database-dish"
+    data-title="${escapeHtml(recipe.name)}"
+    data-ingredients=""
+    data-tags=""
+    data-slug="${escapeHtml(recipe.slug)}"
+  >
+    <button class="dish-toggle" type="button">
+      <span>
+        <strong>${escapeHtml(recipe.name)}</strong><br />
+        <span class="dish-meta">Database recipe</span>
+      </span>
+    </button>
+
+    <div class="dish-content">
+      <div class="database-recipe-content">
+        <p>Loading...</p>
+      </div>
+    </div>
+  </article>
+`);
+
+  dishList.innerHTML =
+    responses.join("\n") +
+    databaseDishes.join("\n");
 
   initialiseAccordions();
   initialiseSearch();
   updateDishCount();
+}
+
+async function loadDatabaseRecipe(card) {
+  if (card.dataset.loaded === "true") {
+    return;
+  }
+
+  const slug = card.dataset.slug;
+  const content = card.querySelector(".database-recipe-content");
+
+  try {
+    const response = await fetch(`/api/recipes/${slug}`);
+
+    if (!response.ok) {
+      throw new Error("Recipe could not be loaded");
+    }
+
+    const recipe = await response.json();
+
+    const ingredientsHtml = recipe.ingredients
+      .map(ingredient => {
+        const quantity = ingredient.quantity ?? "";
+        const unit = ingredient.unit ?? "";
+        const notes = ingredient.notes
+          ? ` — ${escapeHtml(ingredient.notes)}`
+          : "";
+
+        return `
+          <li>
+            ${quantity} ${escapeHtml(unit)}
+            ${escapeHtml(ingredient.name)}
+            ${notes}
+          </li>
+        `;
+      })
+      .join("");
+
+    const stepsHtml = recipe.steps
+      .map(step => `
+        <li>
+          ${step.title
+            ? `<strong>${escapeHtml(step.title)}</strong><br />`
+            : ""
+          }
+          ${escapeHtml(step.instruction)}
+        </li>
+      `)
+      .join("");
+
+    content.innerHTML = `
+      <section class="dish-section">
+        <h3>Ingredients</h3>
+        <ul>
+          ${ingredientsHtml}
+        </ul>
+      </section>
+
+      <section class="dish-section">
+        <h3>Method</h3>
+        <ol>
+          ${stepsHtml}
+        </ol>
+      </section>
+    `;
+
+    card.dataset.loaded = "true";
+
+  } catch (error) {
+    content.innerHTML = `
+      <p>Could not load recipe.</p>
+    `;
+    console.error(error);
+  }
 }
 
 function initialiseAccordions() {
@@ -75,9 +187,13 @@ function initialiseAccordions() {
         c.classList.remove("is-open");
       });
 
-      if (!isOpen) {
-        card.classList.add("is-open");
-      }
+    if (!isOpen) {
+  card.classList.add("is-open");
+
+  if (card.classList.contains("database-dish")) {
+    loadDatabaseRecipe(card);
+  }
+}
     });
   });
 }
