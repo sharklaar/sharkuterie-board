@@ -1,4 +1,4 @@
-# Sharkuterie Board
+# Kitchen Ops
 
 A small recipe library served by a Cloudflare Worker, with static pages in `public/` and recipe data in Cloudflare D1.
 

@@ -92,16 +92,6 @@ main,
   border-bottom: 3px solid rgba(255, 248, 242, 0.14);
 }
 
-.site-header::after {
-  content: "🦈";
-  position: absolute;
-  right: 4vw;
-  top: 0.7rem;
-  font-size: clamp(3rem, 8vw, 6rem);
-  opacity: 0.06;
-  transform: rotate(-10deg);
-}
-
 .eyebrow {
   margin: 0 0 0.45rem;
   text-transform: uppercase;

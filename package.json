@@ -1,5 +1,5 @@
 {
-  "name": "sharkuterie-board",
+  "name": "kitchen-ops",
   "version": "1.0.0",
   "private": true,
   "description": "Recipe library powered by Cloudflare Workers and D1",
