@@ -79,3 +79,100 @@
 .recipe-form-page > p a {
   color: inherit;
 }
+
+.ingredients-editor {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.ingredients-editor h2 {
+  margin: 0;
+}
+
+.ingredient-row {
+  display: grid;
+  grid-template-columns: 90px 90px 1fr 1fr 44px;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ingredient-row input {
+  min-width: 0;
+}
+
+.secondary-button {
+  justify-self: start;
+
+  padding: 0.6rem 1rem;
+
+  border: 1px solid #bbb;
+  border-radius: 6px;
+
+  background: #fff;
+  color: #222;
+
+  font: inherit;
+  cursor: pointer;
+}
+
+.remove-ingredient {
+  height: 40px;
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+@media (max-width: 650px) {
+  .ingredient-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ingredient-name,
+  .ingredient-notes {
+    grid-column: span 2;
+  }
+}
+
+.steps-editor {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.steps-editor h2 {
+  margin: 0;
+}
+
+.step-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 2fr 2fr 44px;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.step-row input,
+.step-row textarea {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.remove-step {
+  height: 40px;
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+@media (max-width: 750px) {
+  .step-row {
+    grid-template-columns: 90px 1fr 44px;
+  }
+
+  .step-instruction,
+  .step-why {
+    grid-column: 1 / -1;
+  }
+}

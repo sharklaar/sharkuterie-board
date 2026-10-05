@@ -1,81 +1,82 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>Add Recipe</title>
+    <title>Add Recipe</title>
 
-  <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="stylesheet" href="/css/dishes.css" />
-  <link rel="stylesheet" href="/css/add-recipe.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/dishes.css" />
+    <link rel="stylesheet" href="/css/add-recipe.css" />
 </head>
 
 <body>
 
-  <main class="recipe-form-page">
-    <h1>Add Recipe</h1>
+    <main class="recipe-form-page">
+        <h1>Add Recipe</h1>
 
-    <form id="recipe-form">
+        <form id="recipe-form">
 
-      <label>
-        Recipe name
-        <input
-          type="text"
-          name="name"
-          required
-        />
-      </label>
+            <label>
+                Recipe name
+                <input type="text" name="name" required />
+            </label>
 
-      <label>
-        Description
-        <textarea
-          name="description"
-          rows="4"
-        ></textarea>
-      </label>
+            <label>
+                Description
+                <textarea name="description" rows="4"></textarea>
+            </label>
 
-      <label>
-        Serves
-        <input
-          type="text"
-          name="serves"
-          placeholder="e.g. 4 or 10–12"
-        />
-      </label>
+            <label>
+                Serves
+                <input type="text" name="serves" placeholder="e.g. 4 or 10–12" />
+            </label>
 
-      <label>
-        Heat level
-        <input
-          type="number"
-          name="heat_level"
-          min="0"
-          max="10"
-          step="0.5"
-        />
-      </label>
+            <label>
+                Heat level
+                <input type="number" name="heat_level" min="0" max="10" step="0.5" />
+            </label>
 
-      <label>
-        Total time (minutes)
-        <input
-          type="number"
-          name="total_time_minutes"
-          min="0"
-        />
-      </label>
+            <label>
+                Total time (minutes)
+                <input type="number" name="total_time_minutes" min="0" />
+            </label>
 
-      <button type="submit">
-        Save recipe
-      </button>
+            <section class="ingredients-editor">
+                <h2>Ingredients</h2>
 
-    </form>
+                <div id="ingredient-list"></div>
 
-    <p>
-      <a href="/">Cancel</a>
-    </p>
-  </main>
+                <button type="button" id="add-ingredient" class="secondary-button">
+                    + Add ingredient
+                </button>
+            </section>
 
-  <p id="form-status" role="status"></p>
-<script src="/js/add-recipe.js"></script>
+            <section class="steps-editor">
+                <h2>Method</h2>
+
+                <div id="step-list"></div>
+
+                <button type="button" id="add-step" class="secondary-button">
+                    + Add step
+                </button>
+            </section>
+
+            <button type="submit">
+                Save recipe
+            </button>
+
+        </form>
+
+        <p>
+            <a href="/">Cancel</a>
+        </p>
+    </main>
+
+    <p id="form-status" role="status"></p>
+    <script src="/js/add-recipe.js"></script>
 </body>
+
 </html>
