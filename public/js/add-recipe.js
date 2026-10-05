@@ -7,8 +7,11 @@ const addIngredientButton = document.getElementById("add-ingredient");
 const stepList = document.getElementById("step-list");
 const addStepButton = document.getElementById("add-step");
 
+let ingredientRowCount = 0;
+
 
 function addIngredientRow() {
+  const suggestionsId = `ingredient-suggestions-${++ingredientRowCount}`;
   const row = document.createElement("div");
   row.className = "ingredient-row";
 
@@ -27,11 +30,17 @@ function addIngredientRow() {
       placeholder="Unit"
     />
 
-    <input
-      type="text"
-      class="ingredient-name"
-      placeholder="Ingredient"
-    />
+    <div class="ingredient-name-field">
+      <input
+        type="text"
+        class="ingredient-name"
+        placeholder="Ingredient"
+        aria-label="Ingredient name"
+        list="${suggestionsId}"
+        autocomplete="off"
+      />
+      <datalist id="${suggestionsId}"></datalist>
+    </div>
 
     <input
       type="text"
@@ -47,6 +56,55 @@ function addIngredientRow() {
       ×
     </button>
   `;
+
+  const ingredientName = row.querySelector(".ingredient-name");
+  const suggestions = row.querySelector("datalist");
+  let suggestionTimer;
+  let suggestionRequest;
+
+  ingredientName.addEventListener("input", () => {
+    clearTimeout(suggestionTimer);
+    suggestionRequest?.abort();
+
+    const query = ingredientName.value.trim();
+    if (query.length < 2) {
+      suggestions.replaceChildren();
+      return;
+    }
+
+    suggestionTimer = setTimeout(async () => {
+      const controller = new AbortController();
+      suggestionRequest = controller;
+
+      try {
+        const response = await fetch(
+          `/api/ingredients?q=${encodeURIComponent(query)}`,
+          { signal: controller.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error("Ingredient suggestions could not be loaded");
+        }
+
+        const result = await response.json();
+        if (ingredientName.value.trim() !== query) {
+          return;
+        }
+
+        suggestions.replaceChildren(
+          ...result.ingredients.map(name => {
+            const option = document.createElement("option");
+            option.value = name;
+            return option;
+          })
+        );
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error(error);
+        }
+      }
+    }, 180);
+  });
 
   row
     .querySelector(".remove-ingredient")

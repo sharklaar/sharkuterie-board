@@ -11,6 +11,34 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Suggest previously used ingredient names
+    if (
+      url.pathname === "/api/ingredients" &&
+      request.method === "GET"
+    ) {
+      const query = url.searchParams.get("q")?.trim() || "";
+
+      if (query.length < 2) {
+        return Response.json({ ingredients: [] });
+      }
+
+      const escapedQuery = query.replace(/[!%_]/g, "!$&");
+      const ingredients = await env.DB
+        .prepare(`
+          SELECT DISTINCT TRIM(name) AS name
+          FROM ingredients
+          WHERE TRIM(name) COLLATE NOCASE LIKE ? ESCAPE '!'
+          ORDER BY name COLLATE NOCASE
+          LIMIT 10
+        `)
+        .bind(`${escapedQuery}%`)
+        .all();
+
+      return Response.json({
+        ingredients: ingredients.results.map(ingredient => ingredient.name)
+      });
+    }
+
 
     // List recipes
     if (
