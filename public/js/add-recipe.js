@@ -228,7 +228,6 @@ form.addEventListener("submit", async (event) => {
 
   const formData = new FormData(form);
 
-  const heatLevel = formData.get("heat_level");
   const totalTime = formData.get("total_time_minutes");
 
 
@@ -312,11 +311,6 @@ form.addEventListener("submit", async (event) => {
     name: formData.get("name"),
     description: formData.get("description"),
     serves: formData.get("serves"),
-
-    heat_level:
-      heatLevel === ""
-        ? null
-        : Number(heatLevel),
 
     total_time_minutes:
       totalTime === ""

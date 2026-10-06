@@ -108,7 +108,6 @@ export default {
             slug,
             description,
             serves,
-            heat_level,
             total_time_minutes,
             image_path
           FROM recipes
@@ -134,7 +133,16 @@ export default {
 
       const recipe = await env.DB
         .prepare(`
-          SELECT *
+          SELECT
+            id,
+            name,
+            slug,
+            description,
+            serves,
+            total_time_minutes,
+            image_path,
+            created_at,
+            updated_at
           FROM recipes
           WHERE slug = ?
         `)
@@ -296,19 +304,26 @@ export default {
               slug,
               description,
               serves,
-              heat_level,
               total_time_minutes,
               image_path
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            RETURNING *
+            VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING
+              id,
+              name,
+              slug,
+              description,
+              serves,
+              total_time_minutes,
+              image_path,
+              created_at,
+              updated_at
           `)
           .bind(
             name,
             slug,
             body.description || null,
             body.serves || null,
-            body.heat_level ?? null,
             body.total_time_minutes ?? null,
             imagePath
           )
