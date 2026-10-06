@@ -2,6 +2,7 @@ import { getRecipeImagePath } from "./recipe-library.js";
 
 const dishList = document.getElementById("dish-list");
 const searchInput = document.getElementById("dish-search");
+const clearSearchButton = document.getElementById("clear-dish-search");
 const dishCount = document.getElementById("dish-count");
 const noResults = document.getElementById("no-results");
 const libraryStatus = document.getElementById("recipe-library-status");
@@ -13,6 +14,18 @@ const cancelDelete = document.getElementById("cancel-recipe-delete");
 const confirmDelete = document.getElementById("confirm-recipe-delete");
 let recipeToDelete = null;
 let deleting = false;
+
+function updateClearSearchButton() {
+  clearSearchButton.hidden = searchInput.value.length === 0;
+}
+
+searchInput.addEventListener("input", updateClearSearchButton);
+clearSearchButton.addEventListener("click", () => {
+  searchInput.value = "";
+  searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+  searchInput.focus();
+});
+updateClearSearchButton();
 
 function escapeHtml(value) {
   return String(value)
