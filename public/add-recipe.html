@@ -58,6 +58,28 @@
                         <input type="number" name="total_time_minutes" min="0" placeholder="e.g. 45" />
                     </label>
                 </div>
+
+                <div class="image-upload-field">
+                    <div class="field-label-text">Recipe photo <span class="optional-mark">Optional</span></div>
+                    <div class="image-upload-control">
+                        <input
+                            id="recipe-image"
+                            name="image"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/avif"
+                            aria-describedby="recipe-image-hint"
+                        />
+                        <span class="upload-hint" id="recipe-image-hint">JPEG, PNG, WebP or AVIF · up to 10 MB</span>
+                    </div>
+                </div>
+
+                <div id="image-preview" class="image-preview" hidden>
+                    <img id="image-preview-photo" alt="Preview of the selected recipe photo" />
+                    <div class="image-preview-details">
+                        <span id="image-file-name" class="image-file-name"></span>
+                        <button type="button" id="remove-image" class="remove-image-button">Remove photo</button>
+                    </div>
+                </div>
             </section>
 
             <section class="ingredients-editor form-section" aria-labelledby="ingredients-heading">

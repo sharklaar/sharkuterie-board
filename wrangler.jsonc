@@ -2,18 +2,22 @@
   "name": "kitchen-ops",
   "main": "./src/index.js",
   "compatibility_date": "2026-09-22",
-
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"
   },
-
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "kitchen-ops",
       "database_id": "2bb920cd-af92-404a-8699-004ca4fc65c1",
       "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "kitchen-ops-recipe-images"
     }
   ]
 }

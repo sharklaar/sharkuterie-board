@@ -6,8 +6,55 @@ const addIngredientButton = document.getElementById("add-ingredient");
 
 const stepList = document.getElementById("step-list");
 const addStepButton = document.getElementById("add-step");
+const recipeImageInput = document.getElementById("recipe-image");
+const imagePreview = document.getElementById("image-preview");
+const imagePreviewPhoto = document.getElementById("image-preview-photo");
+const imageFileName = document.getElementById("image-file-name");
+const removeImageButton = document.getElementById("remove-image");
 
 let ingredientRowCount = 0;
+let imagePreviewUrl = null;
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+
+function clearImagePreview() {
+  if (imagePreviewUrl) {
+    URL.revokeObjectURL(imagePreviewUrl);
+    imagePreviewUrl = null;
+  }
+
+  imagePreviewPhoto.removeAttribute("src");
+  imageFileName.textContent = "";
+  imagePreview.hidden = true;
+}
+
+
+recipeImageInput.addEventListener("change", () => {
+  status.textContent = "";
+  clearImagePreview();
+
+  const file = recipeImageInput.files[0];
+  if (!file) {
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_SIZE) {
+    recipeImageInput.value = "";
+    status.textContent = "Photo must be 10 MB or smaller.";
+    return;
+  }
+
+  imagePreviewUrl = URL.createObjectURL(file);
+  imagePreviewPhoto.src = imagePreviewUrl;
+  imageFileName.textContent = file.name;
+  imagePreview.hidden = false;
+});
+
+removeImageButton.addEventListener("click", () => {
+  recipeImageInput.value = "";
+  clearImagePreview();
+});
 
 
 function addIngredientRow() {
@@ -177,7 +224,7 @@ addStepRow();
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  status.textContent = "Saving...";
+  status.textContent = "Saving recipe...";
 
   const formData = new FormData(form);
 
@@ -282,12 +329,17 @@ form.addEventListener("submit", async (event) => {
 
 
   try {
+    const submission = new FormData();
+    submission.append("recipe", JSON.stringify(recipe));
+
+    const image = recipeImageInput.files[0];
+    if (image) {
+      submission.append("image", image);
+    }
+
     const response = await fetch("/api/recipes", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(recipe)
+      body: submission
     });
 
     const result = await response.json();

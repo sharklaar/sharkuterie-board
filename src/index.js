@@ -6,10 +6,65 @@ function makeSlug(name) {
     .replace(/^-+|-+$/g, "");
 }
 
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+function getImageType(bytes) {
+  const isPng = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    .every((byte, index) => bytes[index] === byte);
+
+  if (isPng) {
+    return { extension: "png", contentType: "image/png" };
+  }
+
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { extension: "jpg", contentType: "image/jpeg" };
+  }
+
+  const header = String.fromCharCode(...bytes);
+  if (header.startsWith("RIFF") && header.slice(8, 12) === "WEBP") {
+    return { extension: "webp", contentType: "image/webp" };
+  }
+
+  if (
+    header.slice(4, 8) === "ftyp" &&
+    ["avif", "avis"].includes(header.slice(8, 12))
+  ) {
+    return { extension: "avif", contentType: "image/avif" };
+  }
+
+  return null;
+}
+
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // Serve recipe photos stored in R2
+    if (
+      url.pathname.startsWith("/media/recipe-images/") &&
+      request.method === "GET"
+    ) {
+      const key = url.pathname.slice("/media/".length);
+      if (!/^recipe-images\/[a-f0-9-]+\.(?:jpg|png|webp|avif)$/i.test(key)) {
+        return new Response("Image not found", { status: 404 });
+      }
+
+      const image = await env.IMAGES.get(key);
+      if (!image) {
+        return new Response("Image not found", { status: 404 });
+      }
+
+      const headers = new Headers();
+      image.writeHttpMetadata(headers);
+      headers.set("Cache-Control", "public, max-age=31536000, immutable");
+      headers.set("X-Content-Type-Options", "nosniff");
+      if (image.httpEtag) {
+        headers.set("ETag", image.httpEtag);
+      }
+
+      return new Response(image.body, { headers });
+    }
 
     // Suggest previously used ingredient names
     if (
@@ -139,9 +194,51 @@ export default {
       url.pathname === "/api/recipes" &&
       request.method === "POST"
     ) {
-      const body = await request.json();
+      let body;
+      let imageFile = null;
 
-      const name = body.name?.trim();
+      try {
+        if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+          const contentLength = Number(request.headers.get("content-length") || 0);
+          if (contentLength > MAX_IMAGE_SIZE + 512 * 1024) {
+            return Response.json(
+              { error: "Photo must be 10 MB or smaller" },
+              { status: 413 }
+            );
+          }
+
+          const formData = await request.formData();
+          const recipeJson = formData.get("recipe");
+          if (typeof recipeJson !== "string") {
+            return Response.json(
+              { error: "Recipe details are required" },
+              { status: 400 }
+            );
+          }
+
+          body = JSON.parse(recipeJson);
+          const uploadedFile = formData.get("image");
+          if (uploadedFile instanceof File && uploadedFile.size > 0) {
+            imageFile = uploadedFile;
+          }
+        } else {
+          body = await request.json();
+        }
+      } catch {
+        return Response.json(
+          { error: "Recipe details could not be read" },
+          { status: 400 }
+        );
+      }
+
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return Response.json(
+          { error: "Recipe details are invalid" },
+          { status: 400 }
+        );
+      }
+
+      const name = typeof body.name === "string" ? body.name.trim() : "";
 
       if (!name) {
         return Response.json(
@@ -152,8 +249,45 @@ export default {
 
       const slug = makeSlug(name);
 
+      let imageKey = null;
+      let imagePath = null;
+      let imageType = null;
+
+      if (imageFile) {
+        if (imageFile.size > MAX_IMAGE_SIZE) {
+          return Response.json(
+            { error: "Photo must be 10 MB or smaller" },
+            { status: 413 }
+          );
+        }
+
+        const signature = new Uint8Array(
+          await imageFile.slice(0, 12).arrayBuffer()
+        );
+        imageType = getImageType(signature);
+        if (!imageType) {
+          return Response.json(
+            { error: "Use a JPEG, PNG, WebP, or AVIF photo" },
+            { status: 415 }
+          );
+        }
+
+        imageKey = `recipe-images/${crypto.randomUUID()}.${imageType.extension}`;
+        imagePath = `/media/${imageKey}`;
+      }
+
+      let recipeSaved = false;
 
       try {
+        if (imageFile) {
+          await env.IMAGES.put(imageKey, imageFile, {
+            httpMetadata: {
+              contentType: imageType.contentType,
+              cacheControl: "public, max-age=31536000, immutable"
+            }
+          });
+        }
+
         // Recipe
         const recipe = await env.DB
           .prepare(`
@@ -163,9 +297,10 @@ export default {
               description,
               serves,
               heat_level,
-              total_time_minutes
+              total_time_minutes,
+              image_path
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             RETURNING *
           `)
           .bind(
@@ -174,10 +309,12 @@ export default {
             body.description || null,
             body.serves || null,
             body.heat_level ?? null,
-            body.total_time_minutes ?? null
+            body.total_time_minutes ?? null,
+            imagePath
           )
           .first();
 
+        recipeSaved = Boolean(recipe);
 
         // Ingredients
         const ingredients = Array.isArray(body.ingredients)
@@ -258,6 +395,14 @@ export default {
 
       } catch (error) {
         console.error(error);
+
+        if (imageKey && !recipeSaved) {
+          try {
+            await env.IMAGES.delete(imageKey);
+          } catch (cleanupError) {
+            console.error(cleanupError);
+          }
+        }
 
         return Response.json(
           { error: "Could not create recipe" },

@@ -119,6 +119,17 @@ async function loadDatabaseRecipe(card) {
 
     const recipe = await response.json();
 
+    const imageHtml = recipe.image_path?.startsWith("/media/recipe-images/")
+      ? `
+        <img
+          class="database-recipe-image"
+          src="${escapeHtml(recipe.image_path)}"
+          alt="${escapeHtml(recipe.name)}"
+          loading="lazy"
+        />
+      `
+      : "";
+
     const ingredientsHtml = recipe.ingredients
       .map(ingredient => {
         const quantity = ingredient.quantity ?? "";
@@ -150,6 +161,7 @@ async function loadDatabaseRecipe(card) {
       .join("");
 
     content.innerHTML = `
+      ${imageHtml}
       <section class="dish-section">
         <h3>Ingredients</h3>
         <ul>
