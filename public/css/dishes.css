@@ -228,6 +228,8 @@
 .recipe-card-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .recipe-edit-link {
@@ -239,6 +241,8 @@
   font-size: 0.88rem;
   font-weight: 700;
   text-decoration: none;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .recipe-edit-link:hover {
@@ -271,4 +275,86 @@
   margin: 0.4rem 0 0;
   color: var(--muted);
   white-space: pre-wrap;
+}
+
+.recipe-delete-button,
+.recipe-delete-confirm {
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  padding: 0.5rem 0.85rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recipe-delete-button {
+  background: #fff1f1;
+  color: var(--accent-deep);
+}
+
+.recipe-delete-button:hover {
+  background: #f8e3e3;
+}
+
+.recipe-delete-confirm {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+.recipe-delete-confirm:hover {
+  background: var(--accent-deep);
+}
+
+.recipe-delete-button:focus-visible,
+.recipe-delete-confirm:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.recipe-delete-dialog {
+  width: min(440px, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.recipe-delete-dialog::backdrop {
+  background: rgba(31, 43, 45, 0.55);
+}
+
+.recipe-delete-dialog h2 {
+  margin-bottom: 0.9rem;
+  font-size: 1.4rem;
+}
+
+.recipe-delete-dialog p {
+  overflow-wrap: anywhere;
+}
+
+.recipe-delete-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.5rem;
+}
+
+.recipe-delete-dialog button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.recipe-delete-error {
+  color: var(--accent-deep);
+}
+
+.recipe-library-status {
+  margin: 1rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }

@@ -1,0 +1,3 @@
+# Keep legacy recipe files in Git for reference without serving them.
+/dishes/
+**/.DS_Store

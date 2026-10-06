@@ -2,6 +2,8 @@
 
 A small recipe library served by a Cloudflare Worker, with static pages in `public/` and recipe data in Cloudflare D1.
 
+The recipe board and editor load recipes from D1 only. Legacy recipe files remain in `public/dishes/` for reference; `public/.assetsignore` excludes them from the served assets. They are not automatically imported into the database.
+
 ## Local development
 
 Use Node.js 24 LTS. With `nvm`, select the project version with `nvm use`; then install the exact Wrangler version recorded in `package-lock.json`:
@@ -44,7 +46,9 @@ The Worker serves uploaded photos through `/media/recipe-images/...`; the bucket
 
 Open a recipe on the board and choose **Edit recipe**. The editor loads its ingredients, method, notes, groups, search tags and existing photo. Saving a database recipe updates the same record; its URL stays the same when the name changes.
 
-Saving a file recipe for the first time creates a database record with its original path recorded in `source_file`. The board then excludes that file and displays the saved version. Further edits update the saved record, including when following an older edit link for the file. The original file stays in the repository. A unique index prevents two saved records from replacing the same file.
+Choose **Delete recipe** on an open recipe to display a confirmation dialog. Confirming permanently deletes the database recipe, its ingredients and its method steps in one transaction; cancelling leaves it unchanged. No additional migration is needed. Archived recipe files remain in the repository.
+
+Recipes previously saved from a file remain ordinary database recipes, with the original path recorded in `source_file`. Older edit links for those files load the saved database record. Files without a saved record are available only in the repository for reference.
 
 Migration `0002_recipe_editing.sql` adds the source link, notes, tags and section fields. Apply migrations locally before running this version:
 

@@ -41,7 +41,22 @@
     <p id="no-results" class="no-results" hidden>
       No matching dishes found.
     </p>
+    <p id="recipe-library-status" class="recipe-library-status" role="status" hidden></p>
   </main>
+
+  <dialog id="delete-recipe-dialog" class="recipe-delete-dialog"
+    aria-labelledby="delete-recipe-title" aria-describedby="delete-recipe-description">
+    <form id="delete-recipe-form">
+      <h2 id="delete-recipe-title">Delete recipe?</h2>
+      <p id="delete-recipe-description">Are you sure you want to delete <strong id="delete-recipe-name"></strong>?
+        Its ingredients and method will also be deleted. This cannot be undone.</p>
+      <p id="delete-recipe-error" class="recipe-delete-error" role="alert" hidden></p>
+      <div class="recipe-delete-dialog-actions">
+        <button id="cancel-recipe-delete" class="recipe-edit-link" type="button" autofocus>Cancel</button>
+        <button id="confirm-recipe-delete" class="recipe-delete-confirm" type="submit">Delete recipe</button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="js/dishes.js"></script>
 </body>

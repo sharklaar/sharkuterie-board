@@ -1,5 +1,5 @@
 import { dishFiles } from "./recipe-files.js";
-import { parseFileRecipe, getRecipeImagePath } from "./recipe-library.js";
+import { getRecipeImagePath } from "./recipe-library.js";
 
 const form = document.getElementById("recipe-form");
 const status = document.getElementById("form-status");
@@ -296,9 +296,7 @@ async function initialiseEditor() {
       if (saved.recipes.length) {
         recipe = await readJson(await fetch(`/api/recipes/${encodeURIComponent(saved.recipes[0].slug)}`));
       } else {
-        const response = await fetch(`/${requestedFile}`);
-        if (!response.ok) throw new Error("Recipe file could not be loaded");
-        recipe = parseFileRecipe(await response.text(), requestedFile);
+        throw new Error("This archived recipe is not in the recipe library");
       }
     }
     if (recipe) {

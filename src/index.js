@@ -206,6 +206,25 @@ async function saveRecipe(request, env, slug) {
   }
 }
 
+async function deleteRecipe(env, slug) {
+  try {
+    // Delete the whole recipe atomically, including databases created before migrations.
+    const results = await env.DB.batch([
+      env.DB.prepare("DELETE FROM ingredients WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
+      env.DB.prepare("DELETE FROM steps WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
+      env.DB.prepare("DELETE FROM recipes WHERE slug = ? RETURNING slug").bind(slug)
+    ]);
+    const recipe = results[2].results[0];
+    if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
+    return Response.json({ deleted: true, slug: recipe.slug }, {
+      headers: { "Cache-Control": "no-store" }
+    });
+  } catch (error) {
+    console.error(error);
+    return Response.json({ error: "Could not delete recipe. Please try again." }, { status: 500 });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -248,6 +267,9 @@ export default {
 
     const recipeMatch = url.pathname.match(/^\/api\/recipes\/([^/]+)$/);
     const slug = recipeMatch ? decodeURIComponent(recipeMatch[1]) : null;
+    if (slug && request.method === "DELETE") {
+      return deleteRecipe(env, slug);
+    }
     if (slug && request.method === "GET") {
       const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ?`).bind(slug).first();
       if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });

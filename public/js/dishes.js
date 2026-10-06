@@ -1,10 +1,18 @@
-import { dishFiles } from "./recipe-files.js";
 import { getRecipeImagePath } from "./recipe-library.js";
 
 const dishList = document.getElementById("dish-list");
 const searchInput = document.getElementById("dish-search");
 const dishCount = document.getElementById("dish-count");
 const noResults = document.getElementById("no-results");
+const libraryStatus = document.getElementById("recipe-library-status");
+const deleteDialog = document.getElementById("delete-recipe-dialog");
+const deleteForm = document.getElementById("delete-recipe-form");
+const deleteName = document.getElementById("delete-recipe-name");
+const deleteError = document.getElementById("delete-recipe-error");
+const cancelDelete = document.getElementById("cancel-recipe-delete");
+const confirmDelete = document.getElementById("confirm-recipe-delete");
+let recipeToDelete = null;
+let deleting = false;
 
 function escapeHtml(value) {
   return String(value)
@@ -20,28 +28,6 @@ async function loadDishes() {
     const apiResponse = await fetch("/api/recipes");
     if (!apiResponse.ok) throw new Error("Recipe library could not be loaded");
     const data = await apiResponse.json();
-    const replacedFiles = new Set(data.recipes.map(recipe => recipe.source_file).filter(Boolean));
-    const activeFiles = dishFiles.filter(file => !replacedFiles.has(file));
-    const staticCards = await Promise.all(activeFiles.map(async file => {
-      const response = await fetch(file);
-      if (!response.ok) throw new Error("Recipe file could not be loaded");
-      const template = document.createElement("template");
-      template.innerHTML = await response.text();
-      const card = template.content.querySelector(".dish-card");
-      if (!card) throw new Error("Recipe file could not be read");
-      card.dataset.sourceFile = file;
-      const actions = document.createElement("div");
-      actions.className = "recipe-card-actions";
-      const editLink = document.createElement("a");
-      editLink.className = "recipe-edit-link";
-      editLink.href = `/add-recipe.html?source=${encodeURIComponent(file)}`;
-      editLink.textContent = "Edit recipe";
-      editLink.setAttribute("aria-label", `Edit ${card.dataset.title}`);
-      actions.appendChild(editLink);
-      card.querySelector(".dish-content").prepend(actions);
-      return card;
-    }));
-
     const databaseDishes = data.recipes.map(recipe => `
       <article class="dish-card database-dish"
         data-title="${escapeHtml(recipe.name)}"
@@ -56,16 +42,16 @@ async function loadDishes() {
           <div class="recipe-card-actions">
             <a class="recipe-edit-link" href="/add-recipe.html?recipe=${encodeURIComponent(recipe.slug)}"
               aria-label="Edit ${escapeHtml(recipe.name)}">Edit recipe</a>
+            <button class="recipe-delete-button" type="button"
+              aria-label="Delete ${escapeHtml(recipe.name)}">Delete recipe</button>
           </div>
           <div class="database-recipe-content"><p>Loading…</p></div>
         </div>
       </article>
     `);
-    dishList.replaceChildren(...staticCards);
-    dishList.insertAdjacentHTML("beforeend", databaseDishes.join("\n"));
+    dishList.innerHTML = databaseDishes.join("\n");
     initialiseAccordions();
     initialiseSearch();
-    updateDishCount();
 
     const selectedSlug = new URLSearchParams(window.location.search).get("recipe");
     const selectedCard = Array.from(dishList.querySelectorAll(".database-dish"))
@@ -161,53 +147,90 @@ function initialiseAccordions() {
 
 function initialiseSearch() {
   dishList.hidden = true;
-
-  searchInput.addEventListener("input", () => {
-    const query = searchInput.value.trim().toLowerCase();
-    const cards = dishList.querySelectorAll(".dish-card");
-
-if (query.length === 0) {
-  cards.forEach(card => {
-    card.hidden = false;
-  });
-
-  dishCount.textContent =
-    `${cards.length} dish${cards.length === 1 ? "" : "es"}`;
-
-  noResults.hidden = true;
-  return;
+  searchInput.addEventListener("input", filterDishes);
+  filterDishes();
 }
 
+function filterDishes() {
+  const query = searchInput.value.trim().toLowerCase();
+  const cards = dishList.querySelectorAll(".dish-card");
+  if (query) {
     dishList.hidden = false;
     dishCount.hidden = false;
-
-    let visibleCount = 0;
-
-    cards.forEach(card => {
-      const title = card.dataset.title?.toLowerCase() || "";
-      const ingredients = card.dataset.ingredients?.toLowerCase() || "";
-      const tags = card.dataset.tags?.toLowerCase() || "";
-
-      const searchable = `${title} ${ingredients} ${tags}`;
-      const matches = searchable.includes(query);
-
-      card.hidden = !matches;
-
-      if (matches) visibleCount++;
-    });
-
-    dishCount.textContent =
-      `${visibleCount} match${visibleCount === 1 ? "" : "es"}`;
-
-    noResults.hidden = visibleCount !== 0;
+  }
+  let visibleCount = 0;
+  cards.forEach(card => {
+    const searchable = [card.dataset.title, card.dataset.ingredients, card.dataset.tags]
+      .join(" ").toLowerCase();
+    const matches = !query || searchable.includes(query);
+    card.hidden = !matches;
+    if (matches) visibleCount++;
   });
+  dishCount.textContent = query
+    ? `${visibleCount} match${visibleCount === 1 ? "" : "es"}`
+    : `${cards.length} dish${cards.length === 1 ? "" : "es"}`;
+  noResults.textContent = cards.length
+    ? "No matching dishes found."
+    : "No recipes yet. Add a recipe to get started.";
+  noResults.hidden = visibleCount !== 0;
 }
 
-function updateDishCount() {
-  const count = document.querySelectorAll(".dish-card").length;
-
-  dishCount.textContent =
-    `${count} dish${count === 1 ? "" : "es"}`;
+function setDeleting(value) {
+  deleting = value;
+  confirmDelete.disabled = value;
+  cancelDelete.disabled = value;
+  confirmDelete.textContent = value ? "Deleting…" : "Delete recipe";
+  deleteForm.setAttribute("aria-busy", String(value));
 }
+
+dishList.addEventListener("click", event => {
+  const button = event.target.closest(".recipe-delete-button");
+  if (!button || deleteDialog.open) return;
+  recipeToDelete = button.closest(".dish-card");
+  deleteName.textContent = recipeToDelete.dataset.title;
+  deleteError.textContent = "";
+  deleteError.hidden = true;
+  setDeleting(false);
+  deleteDialog.showModal();
+});
+
+cancelDelete.addEventListener("click", () => {
+  if (!deleting) deleteDialog.close();
+});
+deleteDialog.addEventListener("cancel", event => {
+  if (deleting) event.preventDefault();
+});
+deleteDialog.addEventListener("close", () => { recipeToDelete = null; });
+
+deleteForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!recipeToDelete || deleting) return;
+  const card = recipeToDelete;
+  const { slug, title } = card.dataset;
+  deleteError.hidden = true;
+  setDeleting(true);
+  try {
+    const response = await fetch(`/api/recipes/${encodeURIComponent(slug)}`, { method: "DELETE" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not delete recipe. Please try again.");
+    card.remove();
+    filterDishes();
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("recipe") === slug) {
+      url.searchParams.delete("recipe");
+      window.history.replaceState(null, "", url);
+    }
+    libraryStatus.textContent = `“${title}” was deleted.`;
+    libraryStatus.hidden = false;
+    deleteDialog.close();
+    searchInput.focus();
+  } catch (error) {
+    console.error(error);
+    deleteError.textContent = error.message;
+    deleteError.hidden = false;
+  } finally {
+    setDeleting(false);
+  }
+});
 
 loadDishes();
