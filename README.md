@@ -39,3 +39,23 @@ npx wrangler r2 bucket create kitchen-ops-recipe-images
 ```
 
 The Worker serves uploaded photos through `/media/recipe-images/...`; the bucket does not need public access. Uploads accept JPEG, PNG, WebP, or AVIF files up to 10 MB. `image_path` already exists in the D1 schema, so this feature does not need a database migration.
+
+## Editing recipes
+
+Open a recipe on the board and choose **Edit recipe**. The editor loads its ingredients, method, notes, groups, search tags and existing photo. Saving a database recipe updates the same record; its URL stays the same when the name changes.
+
+Saving a file recipe for the first time creates a database record with its original path recorded in `source_file`. The board then excludes that file and displays the saved version. Further edits update the saved record, including when following an older edit link for the file. The original file stays in the repository. A unique index prevents two saved records from replacing the same file.
+
+Migration `0002_recipe_editing.sql` adds the source link, notes, tags and section fields. Apply migrations locally before running this version:
+
+```sh
+npm run db:migrate:local
+```
+
+Apply the same migration to remote D1 **before deploying this version**, using the backup and remote migration process above. Adding the columns preserves existing recipes and does not automatically import file recipes.
+
+The editing integration checks use isolated local D1 and R2 storage via the Workers runtime bundled with Wrangler:
+
+```sh
+npm test
+```

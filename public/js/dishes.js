@@ -1,50 +1,5 @@
-const dishFiles = [
-
-  //"dishes/spinach-ricotta-arancini.html",
-  "dishes/risotto-base.html",
-  "dishes/pea-soup.html",
-  "dishes/salmon-ceviche.html",
-  "dishes/green-oil.html",
-  "dishes/mackerel-pate.html",
-  "dishes/chimichurri.html",
-  "dishes/pan-tumaca.html",
-  "dishes/tempura-courgette.html",
-  "dishes/bbq-sauce.html",
-  "dishes/hummus.html",
-  "dishes/crispy-chilli-oil.html",
-  "dishes/scallops.html",
-  "dishes/chicken-liver-parfait.html",
-  "dishes/asparagus-starter.html",
-  "dishes/trio-of-nibbles.html",
-  "dishes/salsa-verde.html",
-  "dishes/toastie-mix.html",
-  "dishes/wild-garlic-pesto.html",
-  "dishes/rockefeller.html",
-"dishes/parsley-sauce.html",
-"dishes/parsley-and-artichoke-salad.html",
-"dishes/pickled-endive.html",
-"dishes/parsley-salad.html",
-"dishes/parmesan-beignets.html",
-"dishes/parmesan-biscuits.html",
-"dishes/pickled-vegetable-relish.html",
-"dishes/onion-confit.html",
-"dishes/onions-monegasque.html",
-"dishes/nicoise.html",
-"dishes/mustard-dressing.html",
-"dishes/mushrooms-a-la-grecque.html",
-"dishes/marinated-courgettes.html",
-"dishes/marinated-baby-artichokes.html",
-"dishes/messine-sauce.html",
-"dishes/lobster-stock.html",
-"dishes/lime-ginger-and-coriander-butter.html",
-"dishes/lemon-and-basil-risotto.html",
-"dishes/mayonnaise.html",
-"dishes/asparagus-soup.html",
-"dishes/katsu-curry.html",
-"dishes/chicken-pie.html",
-"dishes/lime-pickle.html",
-"dishes/achari.html"
-];
+import { dishFiles } from "./recipe-files.js";
+import { getRecipeImagePath } from "./recipe-library.js";
 
 const dishList = document.getElementById("dish-list");
 const searchInput = document.getElementById("dish-search");
@@ -61,151 +16,145 @@ function escapeHtml(value) {
 }
 
 async function loadDishes() {
-  // Existing static dishes
-  const responses = await Promise.all(
-    dishFiles.map(file => fetch(file).then(res => res.text()))
-  );
+  try {
+    const apiResponse = await fetch("/api/recipes");
+    if (!apiResponse.ok) throw new Error("Recipe library could not be loaded");
+    const data = await apiResponse.json();
+    const replacedFiles = new Set(data.recipes.map(recipe => recipe.source_file).filter(Boolean));
+    const activeFiles = dishFiles.filter(file => !replacedFiles.has(file));
+    const staticCards = await Promise.all(activeFiles.map(async file => {
+      const response = await fetch(file);
+      if (!response.ok) throw new Error("Recipe file could not be loaded");
+      const template = document.createElement("template");
+      template.innerHTML = await response.text();
+      const card = template.content.querySelector(".dish-card");
+      if (!card) throw new Error("Recipe file could not be read");
+      card.dataset.sourceFile = file;
+      const actions = document.createElement("div");
+      actions.className = "recipe-card-actions";
+      const editLink = document.createElement("a");
+      editLink.className = "recipe-edit-link";
+      editLink.href = `/add-recipe.html?source=${encodeURIComponent(file)}`;
+      editLink.textContent = "Edit recipe";
+      editLink.setAttribute("aria-label", `Edit ${card.dataset.title}`);
+      actions.appendChild(editLink);
+      card.querySelector(".dish-content").prepend(actions);
+      return card;
+    }));
 
-  // New database-backed dishes
-  const apiResponse = await fetch("/api/recipes");
-  const data = await apiResponse.json();
+    const databaseDishes = data.recipes.map(recipe => `
+      <article class="dish-card database-dish"
+        data-title="${escapeHtml(recipe.name)}"
+        data-ingredients="${escapeHtml(recipe.ingredient_names || "")}" data-tags="${escapeHtml(recipe.tags || "")}"
+        data-slug="${escapeHtml(recipe.slug)}">
+        <button class="dish-toggle" type="button" aria-expanded="false">
+          <span><strong>${escapeHtml(recipe.name)}</strong><br />
+            <span class="dish-meta">${escapeHtml(recipe.description || "Recipe")}</span>
+          </span>
+        </button>
+        <div class="dish-content">
+          <div class="recipe-card-actions">
+            <a class="recipe-edit-link" href="/add-recipe.html?recipe=${encodeURIComponent(recipe.slug)}"
+              aria-label="Edit ${escapeHtml(recipe.name)}">Edit recipe</a>
+          </div>
+          <div class="database-recipe-content"><p>Loading…</p></div>
+        </div>
+      </article>
+    `);
+    dishList.replaceChildren(...staticCards);
+    dishList.insertAdjacentHTML("beforeend", databaseDishes.join("\n"));
+    initialiseAccordions();
+    initialiseSearch();
+    updateDishCount();
 
-const databaseDishes = data.recipes.map(recipe => `
-  <article
-    class="dish-card database-dish"
-    data-title="${escapeHtml(recipe.name)}"
-    data-ingredients=""
-    data-tags=""
-    data-slug="${escapeHtml(recipe.slug)}"
-  >
-    <button class="dish-toggle" type="button">
-      <span>
-        <strong>${escapeHtml(recipe.name)}</strong><br />
-        <span class="dish-meta">Database recipe</span>
-      </span>
-    </button>
+    const selectedSlug = new URLSearchParams(window.location.search).get("recipe");
+    const selectedCard = Array.from(dishList.querySelectorAll(".database-dish"))
+      .find(card => card.dataset.slug === selectedSlug);
+    if (selectedCard) {
+      searchInput.value = selectedCard.dataset.title;
+      searchInput.dispatchEvent(new Event("input"));
+      selectedCard.classList.add("is-open");
+      selectedCard.querySelector(".dish-toggle").setAttribute("aria-expanded", "true");
+      await loadDatabaseRecipe(selectedCard);
+    }
+  } catch (error) {
+    console.error(error);
+    noResults.textContent = "The recipe library could not be loaded. Please refresh to try again.";
+    noResults.hidden = false;
+  }
+}
 
-    <div class="dish-content">
-      <div class="database-recipe-content">
-        <p>Loading...</p>
-      </div>
-    </div>
-  </article>
-`);
-
-  dishList.innerHTML =
-    responses.join("\n") +
-    databaseDishes.join("\n");
-
-  initialiseAccordions();
-  initialiseSearch();
-  updateDishCount();
+function renderGroups(rows, heading, renderItem) {
+  const groups = [];
+  for (const row of rows) {
+    const section = row.section || "";
+    const last = groups[groups.length - 1];
+    if (last?.section === section) last.rows.push(row);
+    else groups.push({ section, rows: [row] });
+  }
+  const listTag = heading === "Ingredients" ? "ul" : "ol";
+  return groups.map(group => `
+    <section class="dish-section">
+      <h3>${escapeHtml(group.section ? `${heading} · ${group.section}` : heading)}</h3>
+      <${listTag}>${group.rows.map(renderItem).join("")}</${listTag}>
+    </section>
+  `).join("");
 }
 
 async function loadDatabaseRecipe(card) {
-  if (card.dataset.loaded === "true") {
-    return;
-  }
-
-  const slug = card.dataset.slug;
+  if (card.dataset.loaded === "true") return;
   const content = card.querySelector(".database-recipe-content");
-
   try {
-    const response = await fetch(`/api/recipes/${slug}`);
-
-    if (!response.ok) {
-      throw new Error("Recipe could not be loaded");
-    }
-
+    const response = await fetch(`/api/recipes/${encodeURIComponent(card.dataset.slug)}`);
+    if (!response.ok) throw new Error("Recipe could not be loaded");
     const recipe = await response.json();
-
-    const imageHtml = recipe.image_path?.startsWith("/media/recipe-images/")
-      ? `
-        <img
-          class="database-recipe-image"
-          src="${escapeHtml(recipe.image_path)}"
-          alt="${escapeHtml(recipe.name)}"
-          loading="lazy"
-        />
-      `
+    const imagePath = getRecipeImagePath(recipe.image_path);
+    const imageHtml = imagePath
+      ? `<img class="database-recipe-image" src="${escapeHtml(imagePath)}" alt="${escapeHtml(recipe.name)}" loading="lazy" />`
       : "";
-
-    const ingredientsHtml = recipe.ingredients
-      .map(ingredient => {
-        const quantity = ingredient.quantity ?? "";
-        const unit = ingredient.unit ?? "";
-        const notes = ingredient.notes
-          ? ` — ${escapeHtml(ingredient.notes)}`
-          : "";
-
-        return `
-          <li>
-            ${quantity} ${escapeHtml(unit)}
-            ${escapeHtml(ingredient.name)}
-            ${notes}
-          </li>
-        `;
-      })
-      .join("");
-
-    const stepsHtml = recipe.steps
-      .map(step => `
-        <li>
-          ${step.title
-            ? `<strong>${escapeHtml(step.title)}</strong><br />`
-            : ""
-          }
-          ${escapeHtml(step.instruction)}
-        </li>
-      `)
-      .join("");
-
+    const ingredientsHtml = renderGroups(recipe.ingredients, "Ingredients", ingredient => `
+      <li>${escapeHtml(ingredient.quantity ?? "")} ${escapeHtml(ingredient.unit || "")}
+        ${escapeHtml(ingredient.name)}${ingredient.notes ? ` — ${escapeHtml(ingredient.notes)}` : ""}</li>
+    `);
+    const stepsHtml = renderGroups(recipe.steps, "Method", step => `
+      <li>
+        ${step.time_offset_minutes != null ? `<span class="step-timing">T+ ${escapeHtml(step.time_offset_minutes)} min</span> ` : ""}
+        ${step.title ? `<strong>${escapeHtml(step.title)}</strong><br />` : ""}
+        <span class="recipe-text">${escapeHtml(step.instruction)}</span>
+        ${step.why ? `<p class="step-explanation">${escapeHtml(step.why)}</p>` : ""}
+      </li>
+    `);
+    const facts = [recipe.serves ? `Serves ${recipe.serves}` : "",
+      recipe.total_time_minutes != null ? `${recipe.total_time_minutes} minutes` : ""].filter(Boolean);
     content.innerHTML = `
       ${imageHtml}
-      <section class="dish-section">
-        <h3>Ingredients</h3>
-        <ul>
-          ${ingredientsHtml}
-        </ul>
-      </section>
-
-      <section class="dish-section">
-        <h3>Method</h3>
-        <ol>
-          ${stepsHtml}
-        </ol>
-      </section>
+      ${facts.length ? `<p class="recipe-facts">${escapeHtml(facts.join(" · "))}</p>` : ""}
+      ${recipe.description ? `<p class="recipe-text">${escapeHtml(recipe.description)}</p>` : ""}
+      ${ingredientsHtml}${stepsHtml}
+      ${recipe.notes ? `<section class="dish-section"><h3>Recipe notes</h3><p class="recipe-text">${escapeHtml(recipe.notes)}</p></section>` : ""}
     `;
-
     card.dataset.loaded = "true";
-
   } catch (error) {
-    content.innerHTML = `
-      <p>Could not load recipe.</p>
-    `;
+    content.innerHTML = "<p>Could not load recipe. Close and reopen it to try again.</p>";
     console.error(error);
   }
 }
 
 function initialiseAccordions() {
-  const toggles = document.querySelectorAll(".dish-toggle");
-
-  toggles.forEach(toggle => {
+  dishList.querySelectorAll(".dish-toggle").forEach(toggle => {
+    toggle.setAttribute("aria-expanded", "false");
     toggle.addEventListener("click", () => {
       const card = toggle.closest(".dish-card");
       const isOpen = card.classList.contains("is-open");
-
-      document.querySelectorAll(".dish-card").forEach(c => {
-        c.classList.remove("is-open");
+      dishList.querySelectorAll(".dish-card").forEach(other => {
+        other.classList.remove("is-open");
+        other.querySelector(".dish-toggle").setAttribute("aria-expanded", "false");
       });
-
-    if (!isOpen) {
-  card.classList.add("is-open");
-
-  if (card.classList.contains("database-dish")) {
-    loadDatabaseRecipe(card);
-  }
-}
+      if (!isOpen) {
+        card.classList.add("is-open");
+        toggle.setAttribute("aria-expanded", "true");
+        if (card.classList.contains("database-dish")) loadDatabaseRecipe(card);
+      }
     });
   });
 }
@@ -215,7 +164,7 @@ function initialiseSearch() {
 
   searchInput.addEventListener("input", () => {
     const query = searchInput.value.trim().toLowerCase();
-    const cards = document.querySelectorAll(".dish-card");
+    const cards = dishList.querySelectorAll(".dish-card");
 
 if (query.length === 0) {
   cards.forEach(card => {

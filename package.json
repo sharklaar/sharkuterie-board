@@ -5,6 +5,7 @@
   "description": "Recipe library powered by Cloudflare Workers and D1",
   "main": "index.js",
   "scripts": {
+    "test": "node --test tests/*.test.mjs",
     "dev": "wrangler dev",
     "db:migrate:local": "wrangler d1 migrations apply kitchen-ops --local",
     "db:migrate:remote": "wrangler d1 migrations apply kitchen-ops --remote"

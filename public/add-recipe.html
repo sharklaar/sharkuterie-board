@@ -52,10 +52,15 @@
                         <span class="field-label-text">Total time <span class="optional-mark">Optional · minutes</span></span>
                         <input type="number" name="total_time_minutes" min="0" placeholder="e.g. 45" />
                     </label>
+
+                    <label class="form-field wide-field">
+                        <span class="field-label-text">Search tags <span class="optional-mark">Optional</span></span>
+                        <input type="text" name="tags" placeholder="e.g. starter vegetarian prep" />
+                    </label>
                 </div>
 
                 <div class="image-upload-field">
-                    <div class="field-label-text">Recipe photo <span class="optional-mark">Optional</span></div>
+                    <label for="recipe-image" class="field-label-text">Recipe photo <span class="optional-mark">Optional</span></label>
                     <div class="image-upload-control">
                         <input
                             id="recipe-image"
@@ -109,6 +114,20 @@
                 </button>
             </section>
 
+            <section class="form-section" aria-labelledby="notes-heading">
+                <div class="section-heading">
+                    <span class="section-number">04</span>
+                    <div>
+                        <h2 id="notes-heading">Recipe notes</h2>
+                        <p>Keep useful timing, serving and development notes with the recipe.</p>
+                    </div>
+                </div>
+                <label class="form-field">
+                    <span class="field-label-text">Notes <span class="optional-mark">Optional</span></span>
+                    <textarea name="notes" rows="5" placeholder="Anything else the kitchen needs to know"></textarea>
+                </label>
+            </section>
+
             <div class="form-actions">
                 <button type="submit" class="save-button">Save recipe</button>
                 <a class="cancel-link" href="/">Cancel</a>
@@ -118,7 +137,7 @@
         <p id="form-status" role="status" aria-live="polite"></p>
     </main>
 
-    <script src="/js/add-recipe.js"></script>
+    <script type="module" src="/js/add-recipe.js"></script>
 </body>
 
 </html>

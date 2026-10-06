@@ -1,3 +1,6 @@
+import { dishFiles } from "./recipe-files.js";
+import { parseFileRecipe, getRecipeImagePath } from "./recipe-library.js";
+
 const form = document.getElementById("recipe-form");
 const status = document.getElementById("form-status");
 
@@ -14,6 +17,13 @@ const removeImageButton = document.getElementById("remove-image");
 
 let ingredientRowCount = 0;
 let imagePreviewUrl = null;
+let currentImagePath = null;
+let removeImage = false;
+let editingSlug = null;
+let sourceFile = null;
+let formReady = false;
+let saving = false;
+const saveButton = form.querySelector('.save-button');
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
@@ -30,21 +40,30 @@ function clearImagePreview() {
 }
 
 
+function showCurrentPhoto() {
+  clearImagePreview();
+  if (currentImagePath) {
+    imagePreviewPhoto.src = currentImagePath;
+    imageFileName.textContent = "Current recipe photo";
+    imagePreview.hidden = false;
+  }
+}
+
 recipeImageInput.addEventListener("change", () => {
   status.textContent = "";
-  clearImagePreview();
-
   const file = recipeImageInput.files[0];
   if (!file) {
+    showCurrentPhoto();
     return;
   }
-
   if (file.size > MAX_IMAGE_SIZE) {
     recipeImageInput.value = "";
+    showCurrentPhoto();
     status.textContent = "Photo must be 10 MB or smaller.";
     return;
   }
-
+  clearImagePreview();
+  removeImage = false;
   imagePreviewUrl = URL.createObjectURL(file);
   imagePreviewPhoto.src = imagePreviewUrl;
   imageFileName.textContent = file.name;
@@ -53,11 +72,13 @@ recipeImageInput.addEventListener("change", () => {
 
 removeImageButton.addEventListener("click", () => {
   recipeImageInput.value = "";
+  currentImagePath = null;
+  removeImage = true;
   clearImagePreview();
 });
 
 
-function addIngredientRow() {
+function addIngredientRow(ingredient = {}) {
   const suggestionsId = `ingredient-suggestions-${++ingredientRowCount}`;
   const row = document.createElement("div");
   row.className = "ingredient-row";
@@ -103,6 +124,19 @@ function addIngredientRow() {
       ×
     </button>
   `;
+
+  const sectionInput = document.createElement("input");
+  sectionInput.type = "text";
+  sectionInput.className = "ingredient-section";
+  sectionInput.placeholder = "Ingredient group (optional), e.g. cheese sauce";
+  row.appendChild(sectionInput);
+  for (const [field, value] of Object.entries({ quantity: ingredient.quantity, unit: ingredient.unit,
+    name: ingredient.name, notes: ingredient.notes, section: ingredient.section })) {
+    row.querySelector(`.ingredient-${field}`).value = value ?? "";
+  }
+  row.querySelectorAll("input").forEach(input => {
+    if (!input.hasAttribute("aria-label")) input.setAttribute("aria-label", input.placeholder);
+  });
 
   const ingredientName = row.querySelector(".ingredient-name");
   const suggestions = row.querySelector("datalist");
@@ -156,6 +190,8 @@ function addIngredientRow() {
   row
     .querySelector(".remove-ingredient")
     .addEventListener("click", () => {
+      clearTimeout(suggestionTimer);
+      suggestionRequest?.abort();
       row.remove();
     });
 
@@ -163,7 +199,7 @@ function addIngredientRow() {
 }
 
 
-function addStepRow() {
+function addStepRow(step = {}) {
   const row = document.createElement("div");
   row.className = "step-row";
 
@@ -202,6 +238,17 @@ function addStepRow() {
     </button>
   `;
 
+  const sectionInput = document.createElement("input");
+  sectionInput.type = "text";
+  sectionInput.className = "step-section";
+  sectionInput.placeholder = "Method section (optional), e.g. prep or plating";
+  row.appendChild(sectionInput);
+  for (const [field, value] of Object.entries({ time: step.time_offset_minutes, title: step.title,
+    instruction: step.instruction, why: step.why, section: step.section })) {
+    row.querySelector(`.step-${field}`).value = value ?? "";
+  }
+  row.querySelectorAll("input, textarea").forEach(input => input.setAttribute("aria-label", input.placeholder));
+
   row
     .querySelector(".remove-step")
     .addEventListener("click", () => {
@@ -212,17 +259,75 @@ function addStepRow() {
 }
 
 
-addIngredientButton.addEventListener("click", addIngredientRow);
-addStepButton.addEventListener("click", addStepRow);
+addIngredientButton.addEventListener("click", () => addIngredientRow());
+addStepButton.addEventListener("click", () => addStepRow());
 
 
-// Start with one empty ingredient and one empty step
-addIngredientRow();
-addStepRow();
+function setDisabled(disabled) {
+  for (const control of form.elements) control.disabled = disabled;
+  form.setAttribute("aria-busy", String(disabled));
+}
 
+async function readJson(response) {
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Recipe could not be loaded");
+  return result;
+}
+
+async function initialiseEditor() {
+  const params = new URLSearchParams(window.location.search);
+  const requestedSlug = params.get("recipe");
+  const requestedFile = params.get("source");
+  if (requestedSlug || requestedFile) {
+    document.title = "Edit Recipe | Kitchen Ops";
+    document.querySelector(".recipe-page-header h1").textContent = "Edit a recipe";
+    document.querySelector(".recipe-intro").textContent = "Update the ingredients, method and notes for this recipe.";
+    saveButton.textContent = "Save changes";
+  }
+  setDisabled(true);
+  status.textContent = requestedSlug || requestedFile ? "Loading recipe…" : "";
+  try {
+    let recipe = null;
+    if (requestedSlug) {
+      recipe = await readJson(await fetch(`/api/recipes/${encodeURIComponent(requestedSlug)}`));
+    } else if (requestedFile) {
+      if (!dishFiles.includes(requestedFile)) throw new Error("Recipe file not found");
+      const saved = await readJson(await fetch(`/api/recipes?source_file=${encodeURIComponent(requestedFile)}`));
+      if (saved.recipes.length) {
+        recipe = await readJson(await fetch(`/api/recipes/${encodeURIComponent(saved.recipes[0].slug)}`));
+      } else {
+        const response = await fetch(`/${requestedFile}`);
+        if (!response.ok) throw new Error("Recipe file could not be loaded");
+        recipe = parseFileRecipe(await response.text(), requestedFile);
+      }
+    }
+    if (recipe) {
+      editingSlug = recipe.slug || null;
+      sourceFile = recipe.source_file || null;
+      for (const name of ["name", "description", "serves", "total_time_minutes", "tags", "notes"]) {
+        form.elements.namedItem(name).value = recipe[name] ?? "";
+      }
+      (recipe.ingredients.length ? recipe.ingredients : [{}]).forEach(addIngredientRow);
+      (recipe.steps.length ? recipe.steps : [{}]).forEach(addStepRow);
+      currentImagePath = getRecipeImagePath(recipe.image_path);
+      showCurrentPhoto();
+    } else {
+      addIngredientRow();
+      addStepRow();
+    }
+    formReady = true;
+    setDisabled(false);
+    status.textContent = "";
+  } catch (error) {
+    status.textContent = `${error.message}. Refresh to try again or return to the recipe board.`;
+  }
+}
+
+initialiseEditor();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!formReady || saving) return;
 
   status.textContent = "Saving recipe...";
 
@@ -258,6 +363,8 @@ form.addEventListener("submit", async (event) => {
             .querySelector(".ingredient-name")
             .value
             .trim(),
+
+        section: row.querySelector(".ingredient-section").value.trim() || null,
 
         notes:
           row
@@ -297,6 +404,8 @@ form.addEventListener("submit", async (event) => {
             .value
             .trim(),
 
+        section: row.querySelector(".step-section").value.trim() || null,
+
         why:
           row
             .querySelector(".step-why")
@@ -311,6 +420,11 @@ form.addEventListener("submit", async (event) => {
     name: formData.get("name"),
     description: formData.get("description"),
     serves: formData.get("serves"),
+    tags: formData.get("tags"),
+    notes: formData.get("notes"),
+    source_file: sourceFile,
+    image_path: currentImagePath,
+    remove_image: removeImage,
 
     total_time_minutes:
       totalTime === ""
@@ -322,6 +436,9 @@ form.addEventListener("submit", async (event) => {
   };
 
 
+  saving = true;
+  setDisabled(true);
+  saveButton.textContent = "Saving…";
   try {
     const submission = new FormData();
     submission.append("recipe", JSON.stringify(recipe));
@@ -331,8 +448,9 @@ form.addEventListener("submit", async (event) => {
       submission.append("image", image);
     }
 
-    const response = await fetch("/api/recipes", {
-      method: "POST",
+    const endpoint = editingSlug ? `/api/recipes/${encodeURIComponent(editingSlug)}` : "/api/recipes";
+    const response = await fetch(endpoint, {
+      method: editingSlug ? "PUT" : "POST",
       body: submission
     });
 
@@ -344,10 +462,13 @@ form.addEventListener("submit", async (event) => {
       );
     }
 
-    window.location.href = "/";
+    window.location.href = `/?recipe=${encodeURIComponent(result.slug)}`;
 
   } catch (error) {
     console.error(error);
     status.textContent = error.message;
+    saving = false;
+    setDisabled(false);
+    saveButton.textContent = editingSlug || sourceFile ? "Save changes" : "Save recipe";
   }
 });

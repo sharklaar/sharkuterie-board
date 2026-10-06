@@ -303,6 +303,10 @@
   min-width: 0;
 }
 
+.ingredient-section {
+  grid-column: 1 / -1;
+}
+
 .remove-ingredient,
 .remove-step {
   display: grid;
@@ -362,6 +366,7 @@
   grid-template-columns: 120px minmax(0, 1fr) 44px;
   grid-template-areas:
     "time title remove"
+    "section section section"
     "instruction instruction instruction"
     "why why why";
   gap: 0.65rem;
@@ -378,6 +383,10 @@
 
 .step-title {
   grid-area: title;
+}
+
+.step-section {
+  grid-area: section;
 }
 
 .step-instruction {
@@ -428,6 +437,11 @@
   box-shadow: 0 10px 20px rgba(93, 31, 42, 0.2);
 }
 
+#recipe-form :disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 #form-status:not(:empty) {
   margin: 1rem 0 0;
   padding: 0.9rem 1rem;
@@ -452,7 +466,8 @@
     grid-template-areas:
       "quantity unit remove"
       "name name name"
-      "notes notes notes";
+      "notes notes notes"
+      "section section section";
   }
 
   .ingredient-quantity {
@@ -469,6 +484,10 @@
 
   .ingredient-notes {
     grid-area: notes;
+  }
+
+  .ingredient-section {
+    grid-area: section;
   }
 
   .remove-ingredient {
