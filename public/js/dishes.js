@@ -44,7 +44,7 @@ async function loadDishes() {
     const databaseDishes = data.recipes.map(recipe => `
       <article class="dish-card database-dish"
         data-title="${escapeHtml(recipe.name)}"
-        data-ingredients="${escapeHtml(recipe.ingredient_names || "")}" data-tags="${escapeHtml(recipe.tags || "")}"
+        data-ingredients="${escapeHtml(recipe.ingredient_names || "")}"
         data-slug="${escapeHtml(recipe.slug)}">
         <button class="dish-toggle" type="button" aria-expanded="false">
           <span><strong>${escapeHtml(recipe.name)}</strong><br />
@@ -117,14 +117,12 @@ async function loadDatabaseRecipe(card) {
     `);
     const stepsHtml = renderGroups(recipe.steps, "Method", step => `
       <li>
-        ${step.time_offset_minutes != null ? `<span class="step-timing">T+ ${escapeHtml(step.time_offset_minutes)} min</span> ` : ""}
         ${step.title ? `<strong>${escapeHtml(step.title)}</strong><br />` : ""}
         <span class="recipe-text">${escapeHtml(step.instruction)}</span>
         ${step.why ? `<p class="step-explanation">${escapeHtml(step.why)}</p>` : ""}
       </li>
     `);
-    const facts = [recipe.serves ? `Serves ${recipe.serves}` : "",
-      recipe.total_time_minutes != null ? `${recipe.total_time_minutes} minutes` : ""].filter(Boolean);
+    const facts = [recipe.yield ? `Yield: ${recipe.yield}` : ""].filter(Boolean);
     content.innerHTML = `
       ${imageHtml}
       ${facts.length ? `<p class="recipe-facts">${escapeHtml(facts.join(" · "))}</p>` : ""}
@@ -173,7 +171,7 @@ function filterDishes() {
   }
   let visibleCount = 0;
   cards.forEach(card => {
-    const searchable = [card.dataset.title, card.dataset.ingredients, card.dataset.tags]
+    const searchable = [card.dataset.title, card.dataset.ingredients]
       .join(" ").toLowerCase();
     const matches = !query || searchable.includes(query);
     card.hidden = !matches;

@@ -205,13 +205,6 @@ function addStepRow(step = {}) {
 
   row.innerHTML = `
     <input
-      type="number"
-      class="step-time"
-      placeholder="T+ mins"
-      min="0"
-    />
-
-    <input
       type="text"
       class="step-title"
       placeholder="Step title"
@@ -243,7 +236,7 @@ function addStepRow(step = {}) {
   sectionInput.className = "step-section";
   sectionInput.placeholder = "Method section (optional), e.g. prep or plating";
   row.appendChild(sectionInput);
-  for (const [field, value] of Object.entries({ time: step.time_offset_minutes, title: step.title,
+  for (const [field, value] of Object.entries({ title: step.title,
     instruction: step.instruction, why: step.why, section: step.section })) {
     row.querySelector(`.step-${field}`).value = value ?? "";
   }
@@ -302,7 +295,7 @@ async function initialiseEditor() {
     if (recipe) {
       editingSlug = recipe.slug || null;
       sourceFile = recipe.source_file || null;
-      for (const name of ["name", "description", "serves", "total_time_minutes", "tags", "notes"]) {
+      for (const name of ["name", "description", "yield", "notes"]) {
         form.elements.namedItem(name).value = recipe[name] ?? "";
       }
       (recipe.ingredients.length ? recipe.ingredients : [{}]).forEach(addIngredientRow);
@@ -331,7 +324,6 @@ form.addEventListener("submit", async (event) => {
 
   const formData = new FormData(form);
 
-  const totalTime = formData.get("total_time_minutes");
 
 
   // Ingredients
@@ -379,16 +371,7 @@ form.addEventListener("submit", async (event) => {
     document.querySelectorAll(".step-row")
   )
     .map(row => {
-      const timeValue = row
-        .querySelector(".step-time")
-        .value
-        .trim();
-
       return {
-        time_offset_minutes:
-          timeValue === ""
-            ? null
-            : Number(timeValue),
 
         title:
           row
@@ -417,17 +400,11 @@ form.addEventListener("submit", async (event) => {
   const recipe = {
     name: formData.get("name"),
     description: formData.get("description"),
-    serves: formData.get("serves"),
-    tags: formData.get("tags"),
+    yield: formData.get("yield"),
     notes: formData.get("notes"),
     source_file: sourceFile,
     image_path: currentImagePath,
     remove_image: removeImage,
-
-    total_time_minutes:
-      totalTime === ""
-        ? null
-        : Number(totalTime),
 
     ingredients,
     steps

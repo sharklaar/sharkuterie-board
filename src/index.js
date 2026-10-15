@@ -39,8 +39,8 @@ function getImageType(bytes) {
 }
 
 
-const RECIPE_COLUMNS = `id, name, slug, description, serves, total_time_minutes,
-  image_path, source_file, notes, tags, created_at, updated_at`;
+const RECIPE_COLUMNS = `id, name, slug, description, yield,
+  image_path, source_file, notes, created_at, updated_at`;
 
 class RecipeError extends Error {
   constructor(message, status = 400) {
@@ -81,7 +81,6 @@ function normaliseRows(rows, kind) {
     }
     return {
       instruction: optionalText(row.instruction, "Instruction"),
-      time_offset_minutes: optionalNumber(row.time_offset_minutes, "Step time"),
       title: optionalText(row.title, "Step title"),
       why: optionalText(row.why, "Step explanation"),
       section: optionalText(row.section, "Method section")
@@ -122,10 +121,8 @@ async function saveRecipe(request, env, slug) {
     const ingredients = normaliseRows(body.ingredients, "Ingredients");
     const steps = normaliseRows(body.steps, "Steps");
     const description = optionalText(body.description, "Description");
-    const serves = optionalText(typeof body.serves === "number" ? String(body.serves) : body.serves, "Serves");
-    const totalTime = optionalNumber(body.total_time_minutes, "Total time");
+    const recipeYield = optionalText(body.yield, "Yield");
     const notes = optionalText(body.notes, "Recipe notes");
-    const tags = optionalText(body.tags, "Tags");
 
     const existing = slug
       ? await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ?`).bind(slug).first()
@@ -155,17 +152,17 @@ async function saveRecipe(request, env, slug) {
     const statements = [];
     if (existing) {
       statements.push(env.DB.prepare(`
-        UPDATE recipes SET name = ?, description = ?, serves = ?, total_time_minutes = ?,
-          image_path = ?, notes = ?, tags = ?, updated_at = CURRENT_TIMESTAMP
+        UPDATE recipes SET name = ?, description = ?, yield = ?,
+          image_path = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? RETURNING ${RECIPE_COLUMNS}
-      `).bind(name, description, serves, totalTime, imagePath, notes, tags, existing.id));
+      `).bind(name, description, recipeYield, imagePath, notes, existing.id));
       statements.push(env.DB.prepare("DELETE FROM ingredients WHERE recipe_id = ?").bind(existing.id));
       statements.push(env.DB.prepare("DELETE FROM steps WHERE recipe_id = ?").bind(existing.id));
     } else {
       statements.push(env.DB.prepare(`
-        INSERT INTO recipes (name, slug, description, serves, total_time_minutes, image_path, source_file, notes, tags)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
-      `).bind(name, recipeSlug, description, serves, totalTime, imagePath, sourceFile, notes, tags));
+        INSERT INTO recipes (name, slug, description, yield, image_path, source_file, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
+      `).bind(name, recipeSlug, description, recipeYield, imagePath, sourceFile, notes));
     }
     for (const [index, ingredient] of ingredients.entries()) {
       statements.push(env.DB.prepare(`
@@ -175,9 +172,9 @@ async function saveRecipe(request, env, slug) {
     }
     for (const [index, step] of steps.entries()) {
       statements.push(env.DB.prepare(`
-        INSERT INTO steps (recipe_id, sort_order, time_offset_minutes, title, instruction, why, section)
-        VALUES ((SELECT id FROM recipes WHERE slug = ?), ?, ?, ?, ?, ?, ?)
-      `).bind(recipeSlug, index + 1, step.time_offset_minutes, step.title, step.instruction, step.why, step.section));
+        INSERT INTO steps (recipe_id, sort_order, title, instruction, why, section)
+        VALUES ((SELECT id FROM recipes WHERE slug = ?), ?, ?, ?, ?, ?)
+      `).bind(recipeSlug, index + 1, step.title, step.instruction, step.why, step.section));
     }
 
     if (imageFile) {
@@ -276,7 +273,7 @@ export default {
       const [ingredients, steps] = await env.DB.batch([
         env.DB.prepare(`SELECT quantity, unit, name, notes, sort_order, section
           FROM ingredients WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id),
-        env.DB.prepare(`SELECT sort_order, time_offset_minutes, title, instruction, why, section
+        env.DB.prepare(`SELECT sort_order, title, instruction, why, section
           FROM steps WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id)
       ]);
       return Response.json({ ...recipe, ingredients: ingredients.results, steps: steps.results }, {

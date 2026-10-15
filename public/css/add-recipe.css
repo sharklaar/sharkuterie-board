@@ -363,22 +363,18 @@
 
 .step-row {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) 44px;
   grid-template-areas:
-    "time title remove"
-    "section section section"
-    "instruction instruction instruction"
-    "why why why";
+    "title remove"
+    "section section"
+    "instruction instruction"
+    "why why";
   gap: 0.65rem;
   align-items: start;
   padding: 0.85rem;
   border: 1px solid #e4d9cf;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.7);
-}
-
-.step-time {
-  grid-area: time;
 }
 
 .step-title {

@@ -34,10 +34,7 @@ export function parseFileRecipe(html, sourceFile) {
   const recipe = {
     name: card.dataset.title || text(card.querySelector(".dish-toggle strong")),
     description: text(card.querySelector(".dish-meta") || document.createElement("span")),
-    serves: null,
-    total_time_minutes: null,
     source_file: sourceFile,
-    tags: card.dataset.tags || "",
     notes: "",
     image_path: null,
     ingredients: [],
@@ -79,14 +76,14 @@ export function parseFileRecipe(html, sourceFile) {
           if (noteSection) {
             addNote(title, `• ${value}`);
           } else if (block.tagName === "OL" || methodSection) {
-            recipe.steps.push({ instruction: value, section: title, title: null, why: null, time_offset_minutes: null });
+            recipe.steps.push({ instruction: value, section: title, title: null, why: null });
           } else {
             recipe.ingredients.push(parseIngredient(value, title === "Ingredients" ? null : title));
           }
         }
       } else if (text(block)) {
         if (!noteSection && (methodSection || section.querySelector("ol") || section.querySelector("ul"))) {
-          recipe.steps.push({ instruction: text(block), section: title, title: null, why: null, time_offset_minutes: null });
+          recipe.steps.push({ instruction: text(block), section: title, title: null, why: null });
         } else {
           addNote(title, text(block));
         }

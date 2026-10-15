@@ -305,8 +305,7 @@
   white-space: pre-wrap;
 }
 
-.recipe-facts,
-.step-timing {
+.recipe-facts {
   color: var(--accent-deep);
   font-size: 0.88rem;
   font-weight: 700;

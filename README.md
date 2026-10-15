@@ -44,7 +44,7 @@ The Worker serves uploaded photos through `/media/recipe-images/...`; the bucket
 
 ## Editing recipes
 
-Open a recipe on the board and choose **Edit recipe**. The editor loads its ingredients, method, notes, groups, search tags and existing photo. Saving a database recipe updates the same record; its URL stays the same when the name changes.
+Open a recipe on the board and choose **Edit recipe**. The editor loads its ingredients, method, notes, groups, yield and existing photo. Saving a database recipe updates the same record; its URL stays the same when the name changes.
 
 Choose **Delete recipe** on an open recipe to display a confirmation dialog. Confirming permanently deletes the database recipe, its ingredients and its method steps in one transaction; cancelling leaves it unchanged. No additional migration is needed. Archived recipe files remain in the repository.
 
@@ -63,3 +63,7 @@ The editing integration checks use isolated local D1 and R2 storage via the Work
 ```sh
 npm test
 ```
+
+Migration `0003_recipe_yield.sql` adds the optional free-text yield field (for example, “12 rolls” or “1 litre”). Apply it locally and to remote D1 before deploying this version, following the migration process above.
+
+Serves, search tags and structured recipe/step times are no longer used by the editor, board or API. Existing database columns are retained for compatibility; timing information can be written in descriptions or method instructions.

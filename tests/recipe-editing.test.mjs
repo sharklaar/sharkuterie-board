@@ -18,7 +18,7 @@ before(async () => {
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql"]) {
     const sql = await readFile(path, "utf8");
     for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) {
       await db.prepare(statement).run();
@@ -71,7 +71,10 @@ test("existing recipes keep their identity and replace their ingredient and meth
   assert.equal(edited.body.slug, created.body.slug);
   const loaded = await request(`/api/recipes/${created.body.slug}`);
   assert.equal(loaded.body.name, "Renamed integration recipe");
-  assert.equal(loaded.body.serves, "8");
+  assert.equal("serves" in loaded.body, false);
+  assert.equal("total_time_minutes" in loaded.body, false);
+  assert.equal("tags" in loaded.body, false);
+  assert.equal("time_offset_minutes" in loaded.body.steps[0], false);
   assert.equal(loaded.body.notes, "Updated notes");
   assert.equal(loaded.body.ingredients.length, 1);
   assert.equal(loaded.body.ingredients[0].name, "Milk");
@@ -97,7 +100,7 @@ test("a file conversion stays linked after renaming and cannot be imported twice
   assert.equal(filtered.body.recipes.length, 1);
   assert.equal(filtered.body.recipes[0].name, "Salmon renamed again");
   assert.match(filtered.body.recipes[0].ingredient_names, /Butter/);
-  assert.equal(filtered.body.recipes[0].tags, recipe.tags);
+  assert.equal("tags" in filtered.body.recipes[0], false);
   const duplicate = await request("/api/recipes", "POST", { ...recipe, name: "Another salmon" });
   assert.equal(duplicate.status, 409);
   assert.match(duplicate.body.error, /saved version/);
@@ -160,4 +163,19 @@ test("missing recipes, invalid sources and invalid data give actionable errors",
   assert.equal((await request("/api/recipes", "POST", { ...original("Invalid source"), source_file: "../secret.html" })).status, 400);
   assert.equal((await request("/api/recipes", "POST", { ...original("Invalid amount"), ingredients: [{ name: "Salt", quantity: -5 }] })).status, 400);
   assert.equal((await request("/api/recipes", "POST", { name: "   " })).status, 400);
+});
+
+
+test("optional yield is saved, edited and cleared", async () => {
+  const recipe = original("Yield recipe");
+  const created = await request("/api/recipes", "POST", { ...recipe, yield: "  12 rolls  " });
+  assert.equal(created.status, 201);
+  assert.equal((await request(`/api/recipes/${created.body.slug}`)).body.yield, "12 rolls");
+  const edited = await request(`/api/recipes/${created.body.slug}`, "PUT", { ...recipe, yield: "24 rolls" });
+  assert.equal(edited.body.yield, "24 rolls");
+  const cleared = await request(`/api/recipes/${created.body.slug}`, "PUT", { ...recipe, yield: " " });
+  assert.equal(cleared.body.yield, null);
+  const omitted = await request("/api/recipes", "POST", original("No yield recipe"));
+  assert.equal(omitted.status, 201);
+  assert.equal(omitted.body.yield, null);
 });
