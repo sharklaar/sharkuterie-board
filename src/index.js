@@ -261,7 +261,8 @@ export default {
       if (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
         return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Local sign-in setup</title><body>
           <h1>Set up your local identity</h1><p>Cloudflare Access sign-in applies to the hosted site, not localhost.</p>
-          <p>Add LOCAL_USER_EMAIL to your ignored .dev.vars file using an email from src/organisation.js, then restart npm run dev.</p>
+          <p>Set LOCAL_USER_EMAIL in your ignored .dev.vars file to an active user’s email from Manage Organisation, then stop and restart npm run dev.</p>
+          <p>If you recently changed an email, restart the dev server: it may still be using the previous identity.</p>
           <a href="/">Try again</a></body></html>`, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
       }
       const login = new URL(`/cdn-cgi/access/login/${url.hostname}`, env.ACCESS_ISSUER);
