@@ -398,3 +398,16 @@
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.recipe-activity {
+  margin: 0 0 1.2rem;
+  padding: 0.8rem 1rem;
+  border-left: 3px solid var(--accent-deep);
+  border-radius: 0 8px 8px 0;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.recipe-activity ul { list-style: none; margin: 0; padding: 0; }
+.recipe-activity li + li { margin-top: 0.3rem; }
+.recipe-activity strong { color: var(--accent-deep); font-weight: 600; }

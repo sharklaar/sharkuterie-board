@@ -1,3 +1,4 @@
+import { requireSession } from "./session.js";
 import { dishFiles } from "./recipe-files.js";
 import { getRecipeImagePath } from "./recipe-library.js";
 
@@ -268,6 +269,7 @@ async function initialiseEditor() {
   setDisabled(true);
   status.textContent = requestedSlug || requestedFile ? "Loading recipe…" : "";
   try {
+    if (!await requireSession()) return;
     let recipe = null;
     if (requestedSlug) {
       recipe = await readJson(await fetch(`/api/recipes/${encodeURIComponent(requestedSlug)}`));
@@ -394,6 +396,7 @@ form.addEventListener("submit", async (event) => {
   setDisabled(true);
   saveButton.textContent = "Saving…";
   try {
+    if (!await requireSession()) return;
     const submission = new FormData();
     submission.append("recipe", JSON.stringify(recipe));
 

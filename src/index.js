@@ -1,3 +1,4 @@
+import { authenticatedPerson, publicActivity } from "./identity.js";
 import { dishFiles } from "../public/js/recipe-files.js";
 import { getRecipeImagePath } from "../public/js/recipe-library.js";
 
@@ -96,7 +97,7 @@ function normaliseRows(rows, kind) {
   }).filter(row => kind === "Ingredients" ? row.name : row.instruction);
 }
 
-async function saveRecipe(request, env, slug) {
+async function saveRecipe(request, env, slug, actor) {
   let uploadedKey = null;
   let saved = false;
   try {
@@ -185,6 +186,12 @@ async function saveRecipe(request, env, slug) {
       `).bind(recipeSlug, index + 1, step.title, step.instruction, step.why, step.section));
     }
 
+    statements.push(env.DB.prepare(`
+      INSERT INTO recipe_activity (recipe_id, action, person_id, actor_email, actor_name, actor_position)
+      VALUES ((SELECT id FROM recipes WHERE slug = ?), ?, ?, ?, ?, ?)
+    `).bind(recipeSlug, existing ? "edited" : "created", actor.person?.id || null,
+      actor.email, actor.person?.name || null, actor.person?.position || null));
+
     if (imageFile) {
       await env.IMAGES.put(uploadedKey, imageFile, { httpMetadata: {
         contentType: imageType.contentType,
@@ -215,11 +222,12 @@ async function deleteRecipe(env, slug) {
   try {
     // Delete the whole recipe atomically, including databases created before migrations.
     const results = await env.DB.batch([
+      env.DB.prepare("DELETE FROM recipe_activity WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
       env.DB.prepare("DELETE FROM ingredients WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
       env.DB.prepare("DELETE FROM steps WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
       env.DB.prepare("DELETE FROM recipes WHERE slug = ? RETURNING slug").bind(slug)
     ]);
-    const recipe = results[2].results[0];
+    const recipe = results[3].results[0];
     if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
     return Response.json({ deleted: true, slug: recipe.slug }, {
       headers: { "Cache-Control": "no-store" }
@@ -233,6 +241,31 @@ async function deleteRecipe(env, slug) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/session" && request.method === "GET") {
+      const actor = await authenticatedPerson(request, env);
+      return Response.json({ authenticated: Boolean(actor), name: actor?.person?.name || null,
+        development: actor?.development === true }, { status: actor ? 200 : 401,
+        headers: { "Cache-Control": "no-store" } });
+    }
+    if (url.pathname === "/auth/login" && request.method === "GET") {
+      const requested = url.searchParams.get("returnTo") || "/";
+      // Resolve against this origin and reject external destinations, including encoded slashes.
+      const target = new URL(requested, url.origin);
+      const returnTo = target.origin === url.origin && !target.pathname.startsWith("/auth/")
+        ? target.pathname + target.search : "/";
+      const actor = await authenticatedPerson(request, env);
+      if (actor) return Response.redirect(url.origin + returnTo, 302);
+      if (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
+        return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Local sign-in setup</title><body>
+          <h1>Set up your local identity</h1><p>Cloudflare Access sign-in applies to the hosted site, not localhost.</p>
+          <p>Add LOCAL_USER_EMAIL to your ignored .dev.vars file using an email from src/organisation.js, then restart npm run dev.</p>
+          <a href="/">Try again</a></body></html>`, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+      }
+      const login = new URL(`/cdn-cgi/access/login/${url.hostname}`, env.ACCESS_ISSUER);
+      login.searchParams.set("kid", env.ACCESS_AUD);
+      login.searchParams.set("redirect_url", returnTo);
+      return new Response(null, { status: 302, headers: { Location: login.href, "Cache-Control": "no-store" } });
+    }
     if (url.pathname.startsWith("/media/recipe-images/") && request.method === "GET") {
       const key = url.pathname.slice("/media/".length);
       if (!/^recipe-images\/[a-f0-9-]+\.(?:jpg|png|webp|avif)$/i.test(key)) {
@@ -273,23 +306,27 @@ export default {
     const recipeMatch = url.pathname.match(/^\/api\/recipes\/([^/]+)$/);
     const slug = recipeMatch ? decodeURIComponent(recipeMatch[1]) : null;
     if (slug && request.method === "DELETE") {
+      if (!await authenticatedPerson(request, env)) return Response.json({ error: "Please sign in through Cloudflare Access to change recipes." }, { status: 401 });
       return deleteRecipe(env, slug);
     }
     if (slug && request.method === "GET") {
       const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ?`).bind(slug).first();
       if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
-      const [ingredients, steps] = await env.DB.batch([
+      const [ingredients, steps, activity] = await env.DB.batch([
         env.DB.prepare(`SELECT quantity, name, notes, sort_order, section
           FROM ingredients WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id),
         env.DB.prepare(`SELECT sort_order, title, instruction, why, section
-          FROM steps WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id)
+          FROM steps WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id),
+        env.DB.prepare("SELECT * FROM recipe_activity WHERE recipe_id = ? ORDER BY occurred_at, id").bind(recipe.id)
       ]);
-      return Response.json({ ...recipe, ingredients: ingredients.results, steps: steps.results }, {
+      return Response.json({ ...recipe, ingredients: ingredients.results, steps: steps.results, activity: activity.results.map(publicActivity) }, {
         headers: { "Cache-Control": "no-store" }
       });
     }
     if ((url.pathname === "/api/recipes" && request.method === "POST") || (slug && request.method === "PUT")) {
-      return saveRecipe(request, env, slug);
+      const actor = await authenticatedPerson(request, env);
+      if (!actor) return Response.json({ error: "Please sign in through Cloudflare Access to save recipes." }, { status: 401 });
+      return saveRecipe(request, env, slug, actor);
     }
     return env.ASSETS.fetch(request);
   }

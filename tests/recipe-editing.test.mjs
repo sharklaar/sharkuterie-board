@@ -6,19 +6,32 @@ import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 let runtime;
 let db;
 let images;
+let privateKey;
+let publicJwk;
+async function accessToken(email = "marc@blackhawkwdown.org.uk", overrides = {}) {
+  const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const body = `${encode({ alg: "RS256", kid: "test-key" })}.${encode({ iss: "https://test-access.example", aud: ["test-aud"], exp: Math.floor(Date.now() / 1000) + 600, email, ...overrides })}`;
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(body));
+  return `${body}.${Buffer.from(signature).toString("base64url")}`;
+}
 
 before(async () => {
+  const keys = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  privateKey = keys.privateKey;
+  publicJwk = { ...await crypto.subtle.exportKey("jwk", keys.publicKey), kid: "test-key" };
   // Use the local Workers runtime shipped with the project's pinned Wrangler.
   runtime = new Miniflare(convertV4MiniflareOptions({
-    modules: ["src/index.js", "public/js/recipe-files.js", "public/js/recipe-library.js"]
+    modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js"]
       .map(path => ({ type: "ESModule", path })),
+    bindings: { ACCESS_ISSUER: "https://test-access.example", ACCESS_AUD: "test-aud" },
+    outboundService: async () => Response.json({ keys: [publicJwk] }),
     compatibilityDate: "2026-09-22",
     d1Databases: ["DB"],
     r2Buckets: ["IMAGES"]
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql"]) {
     if (path.endsWith("0004_ingredient_quantity_text.sql")) {
       await db.prepare("INSERT INTO recipes (id, name, slug) VALUES (9000, 'Migration recipe', 'migration-recipe')").run();
       for (const [index, quantity, unit] of [[0, 200, "g"], [1, 0.5, "tsp"], [2, null, "to taste"], [3, 0, null], [4, null, null]]) {
@@ -35,7 +48,7 @@ before(async () => {
 
 after(async () => { await runtime?.dispose(); });
 
-async function request(path, method = "GET", recipe, photo) {
+async function request(path, method = "GET", recipe, photo, email) {
   let body;
   let headers;
   if (photo) {
@@ -49,6 +62,7 @@ async function request(path, method = "GET", recipe, photo) {
     body = JSON.stringify(recipe);
     headers = { "Content-Type": "application/json" };
   }
+  headers = { ...headers, "Cf-Access-Jwt-Assertion": await accessToken(email) };
   const response = await runtime.dispatchFetch(`http://localhost${path}`, { method, body, headers });
   return { status: response.status, body: await response.json() };
 }
@@ -214,4 +228,98 @@ test("migration preserves existing ingredient data and combines quantities and u
     assert.equal(row.sort_order, index);
     assert.equal(row.unit, null);
   });
+});
+
+
+test("creator and every editor are recorded from verified identity, ignoring submitted attribution", async () => {
+  const recipe = { ...original("Attribution recipe"), actor_email: "liam@woodford.group", activity: [{ name: "Spoofed" }] };
+  const created = await request("/api/recipes", "POST", recipe, null, "alex_biggs@hotmail.com");
+  assert.equal(created.status, 201);
+  await request(`/api/recipes/${created.body.slug}`, "PUT", recipe, null, "liam@woodford.group");
+  await request(`/api/recipes/${created.body.slug}`, "PUT", recipe, null, "marc@blackhawkwdown.org.uk");
+  const loaded = await request(`/api/recipes/${created.body.slug}`);
+  assert.deepEqual(loaded.body.activity.map(row => [row.action, row.name]), [["created", "Alex Biggs"], ["edited", "Liam Goodwill"], ["edited", "Marc Daffern"]]);
+  assert.equal(loaded.body.activity[0].position, "Sous Chef");
+  assert.equal(JSON.stringify(loaded.body.activity).includes("@"), false);
+  const deleted = await request(`/api/recipes/${created.body.slug}`, "DELETE");
+  assert.equal(deleted.status, 200);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM recipe_activity WHERE recipe_id = ?").bind(created.body.id).first()).count, 0);
+});
+
+test("missing, tampered, expired and wrong-audience tokens cannot write or spoof email", async () => {
+  const valid = await accessToken();
+  for (const token of [null, valid.slice(0, -8) + "tampered", await accessToken(undefined, { exp: 1 }), await accessToken(undefined, { aud: ["other"] }), await accessToken(undefined, { iss: "https://other.example" })]) {
+    const response = await runtime.dispatchFetch("http://localhost/api/recipes", {
+      method: "POST", headers: { "Content-Type": "application/json", "Cf-Access-Authenticated-User-Email": "liam@woodford.group", ...(token ? { "Cf-Access-Jwt-Assertion": token } : {}) }, body: JSON.stringify(original("Unauthenticated recipe"))
+    });
+    assert.equal(response.status, 401);
+  }
+});
+
+test("legacy recipes have unknown creators and failed saves leave no history", async () => {
+  const legacy = await request("/api/recipes/migration-recipe");
+  assert.equal(legacy.body.activity[0].name, "Unknown");
+  assert.equal(legacy.body.activity[0].occurred_at, legacy.body.created_at);
+  const recipe = original("Activity rollback recipe");
+  const created = await request("/api/recipes", "POST", recipe);
+  await db.prepare(`CREATE TRIGGER reject_history BEFORE INSERT ON recipe_activity WHEN NEW.action = 'edited' BEGIN SELECT RAISE(ABORT, 'History failure'); END`).run();
+  try {
+    const edited = await request(`/api/recipes/${created.body.slug}`, "PUT", { ...recipe, name: "Should not save" });
+    assert.equal(edited.status, 500);
+    const loaded = await request(`/api/recipes/${created.body.slug}`);
+    assert.equal(loaded.body.name, recipe.name);
+    assert.equal(loaded.body.activity.length, 1);
+  } finally { await db.prepare("DROP TRIGGER reject_history").run(); }
+});
+
+test("session checks identify valid users without exposing email and reject expired sessions", async () => {
+  const session = await request("/api/session");
+  assert.equal(session.status, 200);
+  assert.equal(session.body.authenticated, true);
+  assert.equal(session.body.name, "Marc Daffern");
+  assert.equal(JSON.stringify(session.body).includes("@"), false);
+  for (const token of [null, await accessToken(undefined, { exp: 1 })]) {
+    const response = await runtime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session", {
+      headers: token ? { "Cf-Access-Jwt-Assertion": token } : {}
+    });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal((await response.json()).authenticated, false);
+  }
+});
+
+test("hosted login sends unauthenticated users to Access with a safe return path", async () => {
+  const origin = "https://kitchen-ops.marcs-apps.workers.dev";
+  const response = await runtime.dispatchFetch(`${origin}/auth/login?returnTo=${encodeURIComponent('/add-recipe.html?recipe=test')}`, { redirect: "manual" });
+  assert.equal(response.status, 302);
+  const destination = new URL(response.headers.get("Location"));
+  assert.equal(destination.origin, "https://test-access.example");
+  assert.equal(destination.searchParams.get("kid"), "test-aud");
+  assert.equal(destination.searchParams.get("redirect_url"), "/add-recipe.html?recipe=test");
+  for (const path of ["https://evil.example", "//evil.example", "/auth/login"]) {
+    const unsafe = await runtime.dispatchFetch(`${origin}/auth/login?returnTo=${encodeURIComponent(path)}`, { redirect: "manual" });
+    assert.equal(new URL(unsafe.headers.get("Location")).searchParams.get("redirect_url"), "/");
+  }
+  const loggedIn = await runtime.dispatchFetch(`${origin}/auth/login?returnTo=/add-recipe.html`, {
+    redirect: "manual", headers: { "Cf-Access-Jwt-Assertion": await accessToken() }
+  });
+  assert.equal(loggedIn.headers.get("Location"), `${origin}/add-recipe.html`);
+  const local = await runtime.dispatchFetch("http://localhost/auth/login", { redirect: "manual" });
+  assert.equal(local.status, 200);
+  assert.match(await local.text(), /LOCAL_USER_EMAIL/);
+});
+
+test("local development identity is accepted only on loopback and never deployed hostnames", async () => {
+  const localRuntime = new Miniflare(convertV4MiniflareOptions({
+    modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js"].map(path => ({ type: "ESModule", path })),
+    compatibilityDate: "2026-09-22",
+    bindings: { LOCAL_USER_EMAIL: "marc@blackhawkwdown.org.uk" }
+  }));
+  try {
+    const local = await localRuntime.dispatchFetch("http://localhost/api/session");
+    assert.equal(local.status, 200);
+    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", development: true });
+    const hosted = await localRuntime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session");
+    assert.equal(hosted.status, 401);
+  } finally { await localRuntime.dispose(); }
 });

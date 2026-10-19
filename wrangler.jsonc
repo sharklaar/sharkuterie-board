@@ -2,6 +2,10 @@
   "name": "kitchen-ops",
   "main": "./src/index.js",
   "compatibility_date": "2026-09-22",
+  "vars": {
+    "ACCESS_ISSUER": "https://restless-bush-59bb.cloudflareaccess.com",
+    "ACCESS_AUD": "969e52275c70e9aaa94e5429da52822b0e6fdf153f440e556cdaac3a795377eb"
+  },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"

@@ -1,3 +1,4 @@
+import { requireSession } from "./session.js";
 import { getRecipeImagePath } from "./recipe-library.js";
 
 const dishList = document.getElementById("dish-list");
@@ -38,9 +39,18 @@ function escapeHtml(value) {
 
 async function loadDishes() {
   try {
+    if (!await requireSession()) return;
     const apiResponse = await fetch("/api/recipes");
     if (!apiResponse.ok) throw new Error("Recipe library could not be loaded");
     const data = await apiResponse.json();
+    if (!data.recipes.length) {
+      dishList.replaceChildren();
+      dishCount.textContent = "0 recipes";
+      libraryStatus.textContent = "No recipes saved yet. Add a recipe to get started.";
+      libraryStatus.hidden = false;
+      noResults.hidden = true;
+      return;
+    }
     const databaseDishes = data.recipes.map(recipe => `
       <article class="dish-card database-dish"
         data-title="${escapeHtml(recipe.name)}"
@@ -123,7 +133,13 @@ async function loadDatabaseRecipe(card) {
       </li>
     `);
     const facts = [recipe.yield ? `Yield: ${recipe.yield}` : ""].filter(Boolean);
+    const activity = (recipe.activity || []).map(event => {
+      const date = new Date(event.occurred_at.replace(" ", "T") + "Z");
+      const formatted = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "Europe/London" }).format(date);
+      return `<li>${event.action === "created" ? "Created" : "Edited"} by <strong title="${escapeHtml(event.position || "")}">${escapeHtml(event.name)}</strong> on <time datetime="${escapeHtml(event.occurred_at.replace(" ", "T") + "Z")}">${formatted}</time></li>`;
+    }).join("");
     content.innerHTML = `
+      ${activity ? `<div class="recipe-activity" aria-label="Recipe history"><ul>${activity}</ul></div>` : ""}
       ${imageHtml}
       ${facts.length ? `<p class="recipe-facts">${escapeHtml(facts.join(" · "))}</p>` : ""}
       ${recipe.description ? `<p class="recipe-text">${escapeHtml(recipe.description)}</p>` : ""}
@@ -221,6 +237,7 @@ deleteForm.addEventListener("submit", async event => {
   deleteError.hidden = true;
   setDeleting(true);
   try {
+    if (!await requireSession()) return;
     const response = await fetch(`/api/recipes/${encodeURIComponent(slug)}`, { method: "DELETE" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Could not delete recipe. Please try again.");

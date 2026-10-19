@@ -69,3 +69,17 @@ Migration `0003_recipe_yield.sql` adds the optional free-text yield field (for e
 Serves, search tags and structured recipe/step times are no longer used by the editor, board or API. Existing database columns are retained for compatibility; timing information can be written in descriptions or method instructions.
 
 Migration `0004_ingredient_quantity_text.sql` converts ingredient quantities to text and merges existing quantities and units (for example, `200` + `g` → `200g`). It preserves ingredient IDs, ordering, names, notes and groups. Apply it before deploying the single quantity field. The API accepts older clients with separate quantity and unit values.
+
+## Organisation and recipe attribution
+
+Edit `src/organisation.js` to add missing emails or update names/positions. Keep each person's `id` stable. Marc and Liam are marked as admins; this flag is reserved for future features and does not currently restrict permissions. The directory is server-side only.
+
+Writes verify the signature, issuer, audience and expiry of the Cloudflare Access JWT. `ACCESS_ISSUER` and `ACCESS_AUD` in `wrangler.jsonc` identify this site's Access application. Local writes also need a valid token; integration tests use their own signing key and mock Access certificates. Missing or invalid identity cannot save or delete recipes. Authenticated users not yet matched in the directory can still write: their verified email is stored privately, displayed as Unknown, and resolved once their email is added to the directory.
+
+Apply `0005_recipe_activity.sql` before deploying. Each successful creation/edit adds an atomic history event, shown at the top of the expanded recipe with UK dates. Existing recipes receive an Unknown creator event at their original creation date; historical editors cannot be reconstructed. Adding attribution to old recipes requires an explicit mapping. History API responses contain names and positions, never emails. Names/positions resolve from the current directory, with saved snapshots as a fallback.
+
+## Sessions and localhost
+
+The board and editor check `/api/session` on load and before saves/deletions. Missing or expired hosted sessions navigate through `/auth/login` to Cloudflare Access and return to the requested page. Connection failures show an error instead of redirecting. Login destinations are restricted to this origin.
+
+Localhost does not receive the hosted site's Cloudflare Access credentials. For local development, set `LOCAL_USER_EMAIL="your-listed-email"` in ignored `.dev.vars` and restart `npm run dev`. This explicitly simulates that person's identity for local data only. The setting is accepted only on localhost/loopback URLs and only for an email in the organisation directory; never add it to deployed variables. If unset, the local login route explains setup instead of looping through a hosted login. This does not create a production session.
