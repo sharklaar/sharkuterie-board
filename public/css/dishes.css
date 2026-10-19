@@ -221,10 +221,29 @@
   text-align: center;
 }
 
-.add-recipe-button {
+.recipe-user-controls {
   position: fixed;
   top: 1rem;
   right: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: min(240px, calc(100vw - 90px));
+}
+
+.current-user {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent-deep);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.add-recipe-button {
 
   width: 44px;
   height: 44px;

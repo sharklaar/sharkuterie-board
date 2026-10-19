@@ -246,7 +246,7 @@ export default {
     if (orgMatch) return manageOrganisation(request, env, await authenticatedPerson(request, env), orgMatch[1] || null);
     if (url.pathname === "/api/session" && request.method === "GET") {
       const actor = await authenticatedPerson(request, env);
-      return Response.json({ authenticated: Boolean(actor), name: actor?.person?.name || null,
+      return Response.json({ authenticated: Boolean(actor), name: actor?.person?.name || null, email: actor?.email || null,
         admin: actor?.person?.admin === true, development: actor?.development === true }, { status: actor ? 200 : 401,
         headers: { "Cache-Control": "no-store" } });
     }

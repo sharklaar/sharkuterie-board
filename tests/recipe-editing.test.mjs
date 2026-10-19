@@ -272,12 +272,12 @@ test("legacy recipes have unknown creators and failed saves leave no history", a
   } finally { await db.prepare("DROP TRIGGER reject_history").run(); }
 });
 
-test("session checks identify valid users without exposing email and reject expired sessions", async () => {
+test("session checks identify the current user and reject expired sessions", async () => {
   const session = await request("/api/session");
   assert.equal(session.status, 200);
   assert.equal(session.body.authenticated, true);
   assert.equal(session.body.name, "Marc Daffern");
-  assert.equal(JSON.stringify(session.body).includes("@"), false);
+  assert.equal(session.body.email, "marc@blackhawkwdown.org.uk");
   for (const token of [null, await accessToken(undefined, { exp: 1 })]) {
     const response = await runtime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session", {
       headers: token ? { "Cf-Access-Jwt-Assertion": token } : {}
@@ -322,7 +322,7 @@ test("local development identity is accepted only on loopback and never deployed
     for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) await localDb.prepare(statement).run();
     const local = await localRuntime.dispatchFetch("http://localhost/api/session");
     assert.equal(local.status, 200);
-    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", admin: true, development: true });
+    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", email: "marc@blackhawkwdown.org.uk", admin: true, development: true });
     const hosted = await localRuntime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session");
     assert.equal(hosted.status, 401);
   } finally { await localRuntime.dispose(); }
