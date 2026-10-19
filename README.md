@@ -67,3 +67,5 @@ npm test
 Migration `0003_recipe_yield.sql` adds the optional free-text yield field (for example, “12 rolls” or “1 litre”). Apply it locally and to remote D1 before deploying this version, following the migration process above.
 
 Serves, search tags and structured recipe/step times are no longer used by the editor, board or API. Existing database columns are retained for compatibility; timing information can be written in descriptions or method instructions.
+
+Migration `0004_ingredient_quantity_text.sql` converts ingredient quantities to text and merges existing quantities and units (for example, `200` + `g` → `200g`). It preserves ingredient IDs, ordering, names, notes and groups. Apply it before deploying the single quantity field. The API accepts older clients with separate quantity and unit values.

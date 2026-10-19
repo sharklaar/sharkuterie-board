@@ -112,7 +112,7 @@ async function loadDatabaseRecipe(card) {
       ? `<img class="database-recipe-image" src="${escapeHtml(imagePath)}" alt="${escapeHtml(recipe.name)}" loading="lazy" />`
       : "";
     const ingredientsHtml = renderGroups(recipe.ingredients, "Ingredients", ingredient => `
-      <li>${escapeHtml(ingredient.quantity ?? "")} ${escapeHtml(ingredient.unit || "")}
+      <li>${escapeHtml(ingredient.quantity ?? "")}
         ${escapeHtml(ingredient.name)}${ingredient.notes ? ` — ${escapeHtml(ingredient.notes)}` : ""}</li>
     `);
     const stepsHtml = renderGroups(recipe.steps, "Method", step => `

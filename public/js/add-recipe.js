@@ -85,17 +85,9 @@ function addIngredientRow(ingredient = {}) {
 
   row.innerHTML = `
     <input
-      type="number"
-      class="ingredient-quantity"
-      placeholder="Qty"
-      step="any"
-      min="0"
-    />
-
-    <input
       type="text"
-      class="ingredient-unit"
-      placeholder="Unit"
+      class="ingredient-quantity"
+      placeholder="Qty, e.g. 200g"
     />
 
     <div class="ingredient-name-field">
@@ -130,7 +122,7 @@ function addIngredientRow(ingredient = {}) {
   sectionInput.className = "ingredient-section";
   sectionInput.placeholder = "Ingredient group (optional), e.g. cheese sauce";
   row.appendChild(sectionInput);
-  for (const [field, value] of Object.entries({ quantity: ingredient.quantity, unit: ingredient.unit,
+  for (const [field, value] of Object.entries({ quantity: ingredient.quantity,
     name: ingredient.name, notes: ingredient.notes, section: ingredient.section })) {
     row.querySelector(`.ingredient-${field}`).value = value ?? "";
   }
@@ -337,16 +329,7 @@ form.addEventListener("submit", async (event) => {
         .trim();
 
       return {
-        quantity:
-          quantityValue === ""
-            ? null
-            : Number(quantityValue),
-
-        unit:
-          row
-            .querySelector(".ingredient-unit")
-            .value
-            .trim() || null,
+        quantity: quantityValue || null,
 
         name:
           row

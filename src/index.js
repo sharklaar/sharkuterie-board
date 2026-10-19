@@ -63,6 +63,15 @@ function optionalNumber(value, field) {
   return value;
 }
 
+function normaliseQuantity(row) {
+  // Accept older clients with separate numeric quantities and units too.
+  const quantity = typeof row.quantity === "number"
+    ? String(optionalNumber(row.quantity, "Ingredient quantity"))
+    : optionalText(row.quantity, "Ingredient quantity");
+  const unit = optionalText(row.unit, "Ingredient unit");
+  return `${quantity || ""}${unit || ""}` || null;
+}
+
 function normaliseRows(rows, kind) {
   if (rows == null) return [];
   if (!Array.isArray(rows)) throw new RecipeError(`${kind} must be a list`);
@@ -73,8 +82,7 @@ function normaliseRows(rows, kind) {
     if (kind === "Ingredients") {
       return {
         name: optionalText(row.name, "Ingredient name"),
-        quantity: optionalNumber(row.quantity, "Ingredient quantity"),
-        unit: optionalText(row.unit, "Ingredient unit"),
+        quantity: normaliseQuantity(row),
         notes: optionalText(row.notes, "Ingredient notes"),
         section: optionalText(row.section, "Ingredient section")
       };
@@ -168,7 +176,7 @@ async function saveRecipe(request, env, slug) {
       statements.push(env.DB.prepare(`
         INSERT INTO ingredients (recipe_id, quantity, unit, name, notes, sort_order, section)
         VALUES ((SELECT id FROM recipes WHERE slug = ?), ?, ?, ?, ?, ?, ?)
-      `).bind(recipeSlug, ingredient.quantity, ingredient.unit, ingredient.name, ingredient.notes, index + 1, ingredient.section));
+      `).bind(recipeSlug, ingredient.quantity, null, ingredient.name, ingredient.notes, index + 1, ingredient.section));
     }
     for (const [index, step] of steps.entries()) {
       statements.push(env.DB.prepare(`
@@ -271,7 +279,7 @@ export default {
       const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ?`).bind(slug).first();
       if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
       const [ingredients, steps] = await env.DB.batch([
-        env.DB.prepare(`SELECT quantity, unit, name, notes, sort_order, section
+        env.DB.prepare(`SELECT quantity, name, notes, sort_order, section
           FROM ingredients WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id),
         env.DB.prepare(`SELECT sort_order, title, instruction, why, section
           FROM steps WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id)

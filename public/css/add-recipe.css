@@ -290,7 +290,7 @@
 
 .ingredient-row {
   display: grid;
-  grid-template-columns: 100px 120px minmax(150px, 1.1fr) minmax(150px, 1fr) 44px;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(150px, 1.1fr) minmax(150px, 1fr) 44px;
   gap: 0.6rem;
   align-items: center;
   padding: 0.75rem;
@@ -460,7 +460,7 @@
   .ingredient-row {
     grid-template-columns: minmax(70px, 0.7fr) minmax(90px, 1fr) 42px;
     grid-template-areas:
-      "quantity unit remove"
+      "quantity quantity remove"
       "name name name"
       "notes notes notes"
       "section section section";
@@ -468,10 +468,6 @@
 
   .ingredient-quantity {
     grid-area: quantity;
-  }
-
-  .ingredient-unit {
-    grid-area: unit;
   }
 
   .ingredient-name-field {

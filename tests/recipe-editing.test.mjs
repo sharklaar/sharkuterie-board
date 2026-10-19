@@ -18,7 +18,14 @@ before(async () => {
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql"]) {
+    if (path.endsWith("0004_ingredient_quantity_text.sql")) {
+      await db.prepare("INSERT INTO recipes (id, name, slug) VALUES (9000, 'Migration recipe', 'migration-recipe')").run();
+      for (const [index, quantity, unit] of [[0, 200, "g"], [1, 0.5, "tsp"], [2, null, "to taste"], [3, 0, null], [4, null, null]]) {
+        await db.prepare("INSERT INTO ingredients (id, recipe_id, quantity, unit, name, notes, sort_order, section) VALUES (?, 9000, ?, ?, 'Salt', 'fine', ?, 'Sauce')")
+          .bind(9000 + index, quantity, unit, index).run();
+      }
+    }
     const sql = await readFile(path, "utf8");
     for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) {
       await db.prepare(statement).run();
@@ -178,4 +185,33 @@ test("optional yield is saved, edited and cleared", async () => {
   const omitted = await request("/api/recipes", "POST", original("No yield recipe"));
   assert.equal(omitted.status, 201);
   assert.equal(omitted.body.yield, null);
+});
+
+
+test("text quantities survive creating and editing, including legacy client amounts", async () => {
+  const recipe = original("Text quantity recipe");
+  recipe.ingredients = ["200g", "1/2 tsp", "2–3", "to taste", null].map((quantity, i) => ({ name: `Item ${i}`, quantity }));
+  const created = await request("/api/recipes", "POST", recipe);
+  assert.equal(created.status, 201);
+  const loaded = await request(`/api/recipes/${created.body.slug}`);
+  assert.deepEqual(loaded.body.ingredients.map(row => row.quantity), ["200g", "1/2 tsp", "2–3", "to taste", null]);
+  const edited = await request(`/api/recipes/${created.body.slug}`, "PUT", { ...recipe, ingredients: [{ name: "Butter", quantity: 200, unit: "g" }] });
+  assert.equal(edited.status, 200);
+  const saved = await request(`/api/recipes/${created.body.slug}`);
+  assert.equal(saved.body.ingredients[0].quantity, "200g");
+  assert.equal("unit" in saved.body.ingredients[0], false);
+});
+
+
+test("migration preserves existing ingredient data and combines quantities and units", async () => {
+  const rows = (await db.prepare("SELECT * FROM ingredients WHERE recipe_id = 9000 ORDER BY sort_order").all()).results;
+  assert.deepEqual(rows.map(row => row.quantity), ["200g", "0.5tsp", "to taste", "0", null]);
+  rows.forEach((row, index) => {
+    assert.equal(row.id, 9000 + index);
+    assert.equal(row.name, "Salt");
+    assert.equal(row.notes, "fine");
+    assert.equal(row.section, "Sauce");
+    assert.equal(row.sort_order, index);
+    assert.equal(row.unit, null);
+  });
 });

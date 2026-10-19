@@ -16,10 +16,9 @@ function text(element) {
 function parseIngredient(value, section) {
   // Only split clear quantities. Ranges and fractions stay intact for review.
   const match = value.match(/^(\d+(?:\.\d+)?)\s*(?:(kg|g|ml|l|litres?|liters?|pints?|tsp|ktsp|tbsp|teaspoons?|tablespoons?|cloves?)\b\s*|\s+)(.+)$/i);
-  const ingredient = { quantity: null, unit: null, name: value, notes: null, section };
+  const ingredient = { quantity: null, name: value, notes: null, section };
   if (match && !/^(?:[–\-\/]|\d+\s*\/)/.test(match[3])) {
-    ingredient.quantity = Number(match[1]);
-    ingredient.unit = match[2] || null;
+    ingredient.quantity = `${match[1]}${match[2] || ""}`;
     ingredient.name = match[3];
   }
   return ingredient;
