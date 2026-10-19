@@ -117,13 +117,9 @@ function addIngredientRow(ingredient = {}) {
     </button>
   `;
 
-  const sectionInput = document.createElement("input");
-  sectionInput.type = "text";
-  sectionInput.className = "ingredient-section";
-  sectionInput.placeholder = "Ingredient group (optional), e.g. cheese sauce";
-  row.appendChild(sectionInput);
+  row.dataset.section = ingredient.section || "";
   for (const [field, value] of Object.entries({ quantity: ingredient.quantity,
-    name: ingredient.name, notes: ingredient.notes, section: ingredient.section })) {
+    name: ingredient.name, notes: ingredient.notes })) {
     row.querySelector(`.ingredient-${field}`).value = value ?? "";
   }
   row.querySelectorAll("input").forEach(input => {
@@ -337,7 +333,7 @@ form.addEventListener("submit", async (event) => {
             .value
             .trim(),
 
-        section: row.querySelector(".ingredient-section").value.trim() || null,
+        section: row.dataset.section || null,
 
         notes:
           row

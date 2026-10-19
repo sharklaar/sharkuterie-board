@@ -303,10 +303,6 @@
   min-width: 0;
 }
 
-.ingredient-section {
-  grid-column: 1 / -1;
-}
-
 .remove-ingredient,
 .remove-step {
   display: grid;
@@ -462,8 +458,7 @@
     grid-template-areas:
       "quantity quantity remove"
       "name name name"
-      "notes notes notes"
-      "section section section";
+      "notes notes notes";
   }
 
   .ingredient-quantity {
@@ -476,10 +471,6 @@
 
   .ingredient-notes {
     grid-area: notes;
-  }
-
-  .ingredient-section {
-    grid-area: section;
   }
 
   .remove-ingredient {
