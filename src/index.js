@@ -1,3 +1,4 @@
+import { formatIngredientQuantity } from "../public/js/ingredient-quantity.js";
 import { manageOrganisation } from "./organisation.js";
 import { authenticatedPerson, publicActivity } from "./identity.js";
 import { dishFiles } from "../public/js/recipe-files.js";
@@ -71,7 +72,7 @@ function normaliseQuantity(row) {
     ? String(optionalNumber(row.quantity, "Ingredient quantity"))
     : optionalText(row.quantity, "Ingredient quantity");
   const unit = optionalText(row.unit, "Ingredient unit");
-  return `${quantity || ""}${unit || ""}` || null;
+  return formatIngredientQuantity(`${quantity || ""}${unit || ""}`);
 }
 
 function normaliseRows(rows, kind) {
@@ -324,7 +325,7 @@ export default {
         env.DB.prepare("SELECT * FROM recipe_activity WHERE recipe_id = ? ORDER BY occurred_at, id").bind(recipe.id)
       ]);
       const people = (await env.DB.prepare("SELECT id, name, position, email FROM organisation_users").all()).results;
-      return Response.json({ ...recipe, ingredients: ingredients.results, steps: steps.results, activity: activity.results.map(row => publicActivity(row, people)) }, {
+      return Response.json({ ...recipe, ingredients: ingredients.results.map(row => ({ ...row, quantity: formatIngredientQuantity(row.quantity) })), steps: steps.results, activity: activity.results.map(row => publicActivity(row, people)) }, {
         headers: { "Cache-Control": "no-store" }
       });
     }

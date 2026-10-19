@@ -1,3 +1,4 @@
+import { formatIngredientQuantity } from "./ingredient-quantity.js";
 import { requireSession } from "./session.js";
 import { dishFiles } from "./recipe-files.js";
 import { getRecipeImagePath } from "./recipe-library.js";
@@ -119,7 +120,7 @@ function addIngredientRow(ingredient = {}) {
   `;
 
   row.dataset.section = ingredient.section || "";
-  for (const [field, value] of Object.entries({ quantity: ingredient.quantity,
+  for (const [field, value] of Object.entries({ quantity: formatIngredientQuantity(ingredient.quantity),
     name: ingredient.name, notes: ingredient.notes })) {
     row.querySelector(`.ingredient-${field}`).value = value ?? "";
   }

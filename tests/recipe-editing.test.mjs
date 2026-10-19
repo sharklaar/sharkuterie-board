@@ -21,7 +21,7 @@ before(async () => {
   publicJwk = { ...await crypto.subtle.exportKey("jwk", keys.publicKey), kid: "test-key" };
   // Use the local Workers runtime shipped with the project's pinned Wrangler.
   runtime = new Miniflare(convertV4MiniflareOptions({
-    modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js"]
+    modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js", "public/js/ingredient-quantity.js"]
       .map(path => ({ type: "ESModule", path })),
     bindings: { ACCESS_ISSUER: "https://test-access.example", ACCESS_AUD: "test-aud" },
     outboundService: async () => Response.json({ keys: [publicJwk] }),
@@ -311,7 +311,7 @@ test("hosted login sends unauthenticated users to Access with a safe return path
 
 test("local development identity is accepted only on loopback and never deployed hostnames", async () => {
   const localRuntime = new Miniflare(convertV4MiniflareOptions({
-    modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js"].map(path => ({ type: "ESModule", path })),
+    modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js", "public/js/ingredient-quantity.js"].map(path => ({ type: "ESModule", path })),
     compatibilityDate: "2026-09-22",
     d1Databases: ["DB"],
     bindings: { LOCAL_USER_EMAIL: "marc@blackhawkdown.org.uk" }
@@ -377,4 +377,20 @@ test("the last admin cannot be removed or demoted, and changes take effect immed
   } finally {
     assert.equal((await request("/api/organisation/liam-goodwill", "PUT", { ...liam, admin: true })).status, 200);
   }
+});
+
+
+test("ingredient quantities compact measurement symbols and space countable items on reads and saves", async () => {
+  const inputs = ["200 g", "2boxes", "0.5 kg", "250 ml", "2–3cloves", "1/2tsp", "1 1/2cups", "½box", "to taste", "2 x 400g", "2 to 3 boxes", null];
+  const expected = ["200g", "2 boxes", "0.5kg", "250ml", "2–3 cloves", "1/2 tsp", "1 1/2 cups", "½ box", "to taste", "2 x 400g", "2 to 3 boxes", null];
+  const recipe = original("Quantity formatting recipe");
+  recipe.ingredients = inputs.map((quantity, index) => ({ name: `Ingredient ${index}`, quantity }));
+  const created = await request("/api/recipes", "POST", recipe);
+  assert.equal(created.status, 201);
+  assert.deepEqual((await request(`/api/recipes/${created.body.slug}`)).body.ingredients.map(row => row.quantity), expected);
+  await db.prepare("UPDATE ingredients SET quantity = '2boxes' WHERE recipe_id = ? AND sort_order = 1").bind(created.body.id).run();
+  assert.equal((await request(`/api/recipes/${created.body.slug}`)).body.ingredients[0].quantity, "2 boxes");
+  const edited = await request(`/api/recipes/${created.body.slug}`, "PUT", { ...recipe, ingredients: [{ name: "Stock", quantity: 2, unit: "boxes" }, { name: "Flour", quantity: 200, unit: "g" }] });
+  assert.equal(edited.status, 200);
+  assert.deepEqual((await request(`/api/recipes/${created.body.slug}`)).body.ingredients.map(row => row.quantity), ["2 boxes", "200g"]);
 });
