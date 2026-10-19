@@ -8,7 +8,7 @@ let db;
 let images;
 let privateKey;
 let publicJwk;
-async function accessToken(email = "marc@blackhawkwdown.org.uk", overrides = {}) {
+async function accessToken(email = "marc@blackhawkdown.org.uk", overrides = {}) {
   const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
   const body = `${encode({ alg: "RS256", kid: "test-key" })}.${encode({ iss: "https://test-access.example", aud: ["test-aud"], exp: Math.floor(Date.now() / 1000) + 600, email, ...overrides })}`;
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(body));
@@ -31,7 +31,7 @@ before(async () => {
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql", "migrations/0007_correct_marc_email.sql"]) {
     if (path.endsWith("0004_ingredient_quantity_text.sql")) {
       await db.prepare("INSERT INTO recipes (id, name, slug) VALUES (9000, 'Migration recipe', 'migration-recipe')").run();
       for (const [index, quantity, unit] of [[0, 200, "g"], [1, 0.5, "tsp"], [2, null, "to taste"], [3, 0, null], [4, null, null]]) {
@@ -236,7 +236,7 @@ test("creator and every editor are recorded from verified identity, ignoring sub
   const created = await request("/api/recipes", "POST", recipe, null, "alex_biggs@hotmail.com");
   assert.equal(created.status, 201);
   await request(`/api/recipes/${created.body.slug}`, "PUT", recipe, null, "liam@woodford.group");
-  await request(`/api/recipes/${created.body.slug}`, "PUT", recipe, null, "marc@blackhawkwdown.org.uk");
+  await request(`/api/recipes/${created.body.slug}`, "PUT", recipe, null, "marc@blackhawkdown.org.uk");
   const loaded = await request(`/api/recipes/${created.body.slug}`);
   assert.deepEqual(loaded.body.activity.map(row => [row.action, row.name]), [["created", "Alex Biggs"], ["edited", "Liam Goodwill"], ["edited", "Marc Daffern"]]);
   assert.equal(loaded.body.activity[0].position, "Sous Chef");
@@ -277,7 +277,7 @@ test("session checks identify the current user and reject expired sessions", asy
   assert.equal(session.status, 200);
   assert.equal(session.body.authenticated, true);
   assert.equal(session.body.name, "Marc Daffern");
-  assert.equal(session.body.email, "marc@blackhawkwdown.org.uk");
+  assert.equal(session.body.email, "marc@blackhawkdown.org.uk");
   for (const token of [null, await accessToken(undefined, { exp: 1 })]) {
     const response = await runtime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session", {
       headers: token ? { "Cf-Access-Jwt-Assertion": token } : {}
@@ -314,15 +314,15 @@ test("local development identity is accepted only on loopback and never deployed
     modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js"].map(path => ({ type: "ESModule", path })),
     compatibilityDate: "2026-09-22",
     d1Databases: ["DB"],
-    bindings: { LOCAL_USER_EMAIL: "marc@blackhawkwdown.org.uk" }
+    bindings: { LOCAL_USER_EMAIL: "marc@blackhawkdown.org.uk" }
   }));
   try {
     const localDb = await localRuntime.getD1Database("DB");
-    const sql = await readFile("migrations/0006_organisation.sql", "utf8");
+    const sql = (await readFile("migrations/0006_organisation.sql", "utf8")) + (await readFile("migrations/0007_correct_marc_email.sql", "utf8"));
     for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) await localDb.prepare(statement).run();
     const local = await localRuntime.dispatchFetch("http://localhost/api/session");
     assert.equal(local.status, 200);
-    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", email: "marc@blackhawkwdown.org.uk", admin: true, development: true });
+    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", email: "marc@blackhawkdown.org.uk", admin: true, development: true });
     const hosted = await localRuntime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session");
     assert.equal(hosted.status, 401);
   } finally { await localRuntime.dispose(); }
@@ -372,7 +372,7 @@ test("the last admin cannot be removed or demoted, and changes take effect immed
   try {
     assert.equal((await request("/api/session", "GET", undefined, null, liam.email)).body.admin, false);
     assert.equal((await request("/api/organisation/marc-daffern", "DELETE")).status, 409);
-    assert.equal((await request("/api/organisation/marc-daffern", "PUT", { name: "Marc Daffern", position: "Commis", email: "marc@blackhawkwdown.org.uk", admin: false })).status, 409);
+    assert.equal((await request("/api/organisation/marc-daffern", "PUT", { name: "Marc Daffern", position: "Commis", email: "marc@blackhawkdown.org.uk", admin: false })).status, 409);
     assert.equal((await request("/api/session")).body.admin, true);
   } finally {
     assert.equal((await request("/api/organisation/liam-goodwill", "PUT", { ...liam, admin: true })).status, 200);
