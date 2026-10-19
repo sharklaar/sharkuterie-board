@@ -1,4 +1,4 @@
-import { organisation } from "./organisation.js";
+import { findPerson } from "./organisation.js";
 
 let cachedKeys;
 let keysExpire = 0;
@@ -12,7 +12,7 @@ export async function authenticatedPerson(request, env) {
     // Explicit opt-in in ignored .dev.vars; never accepted on deployed hostnames.
     if (["localhost", "127.0.0.1", "[::1]"].includes(hostname) && env.LOCAL_USER_EMAIL) {
       const email = env.LOCAL_USER_EMAIL.trim().toLowerCase();
-      const person = organisation.find(person => person.email?.toLowerCase() === email);
+      const person = await findPerson(env, email);
       if (person) return { email, person, development: true };
     }
     const token = request.headers.get("Cf-Access-Jwt-Assertion");
@@ -38,7 +38,7 @@ export async function authenticatedPerson(request, env) {
     const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
     if (!await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, decode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`))) return null;
     const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
-    const person = organisation.find(person => person.email?.toLowerCase() === email);
+    const person = await findPerson(env, email);
     // Unlisted authenticated users retain access; their verified email is stored
     // privately so their name can be resolved when the org list is updated.
     return email ? { email, person: person || null } : null;
@@ -47,7 +47,7 @@ export async function authenticatedPerson(request, env) {
   }
 }
 
-export function publicActivity(row) {
+export function publicActivity(row, organisation) {
   const person = organisation.find(person => person.id === row.person_id) ||
     organisation.find(person => person.email?.toLowerCase() === row.actor_email);
   return { action: row.action, name: person?.name || row.actor_name || "Unknown", position: person?.position || row.actor_position || null, occurred_at: row.occurred_at };

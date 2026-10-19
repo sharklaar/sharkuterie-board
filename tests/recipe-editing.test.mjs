@@ -31,7 +31,7 @@ before(async () => {
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql"]) {
     if (path.endsWith("0004_ingredient_quantity_text.sql")) {
       await db.prepare("INSERT INTO recipes (id, name, slug) VALUES (9000, 'Migration recipe', 'migration-recipe')").run();
       for (const [index, quantity, unit] of [[0, 200, "g"], [1, 0.5, "tsp"], [2, null, "to taste"], [3, 0, null], [4, null, null]]) {
@@ -313,13 +313,68 @@ test("local development identity is accepted only on loopback and never deployed
   const localRuntime = new Miniflare(convertV4MiniflareOptions({
     modules: ["src/index.js", "src/identity.js", "src/organisation.js", "public/js/recipe-files.js", "public/js/recipe-library.js"].map(path => ({ type: "ESModule", path })),
     compatibilityDate: "2026-09-22",
+    d1Databases: ["DB"],
     bindings: { LOCAL_USER_EMAIL: "marc@blackhawkwdown.org.uk" }
   }));
   try {
+    const localDb = await localRuntime.getD1Database("DB");
+    const sql = await readFile("migrations/0006_organisation.sql", "utf8");
+    for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) await localDb.prepare(statement).run();
     const local = await localRuntime.dispatchFetch("http://localhost/api/session");
     assert.equal(local.status, 200);
-    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", development: true });
+    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", admin: true, development: true });
     const hosted = await localRuntime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session");
     assert.equal(hosted.status, 401);
   } finally { await localRuntime.dispose(); }
+});
+
+test("organisation API restricts access to admins and supports persistent user management", async () => {
+  const path = "/api/organisation";
+  const anonymous = await runtime.dispatchFetch(`http://localhost${path}`);
+  assert.equal(anonymous.status, 401);
+  for (const method of ["GET", "POST", "PUT", "DELETE"]) {
+    const denied = await request(method === "PUT" || method === "DELETE" ? `${path}/marc-daffern` : path, method,
+      ["POST", "PUT"].includes(method) ? { name: "Intruder", position: "Chef", admin: true } : undefined, null, "alex_biggs@hotmail.com");
+    assert.equal(denied.status, 403);
+  }
+  const listed = await request(path);
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.users.length, 7);
+  assert.equal(listed.body.users.find(row => row.id === "liam-goodwill").admin, true);
+  const created = await request(path, "POST", { name: "New chef", position: "Chef", email: "", admin: false });
+  assert.equal(created.status, 201);
+  const id = created.body.id;
+  const edited = await request(`${path}/${id}`, "PUT", { name: "New chef renamed", position: "Sous", email: "  NEW@EXAMPLE.COM  ", admin: true });
+  assert.equal(edited.status, 200);
+  const newSession = await request("/api/session", "GET", undefined, null, "new@example.com");
+  assert.equal(newSession.body.admin, true);
+  assert.equal(newSession.body.name, "New chef renamed");
+  const duplicate = await request(path, "POST", { name: "Duplicate", position: "Chef", email: "NEW@example.com", admin: false });
+  assert.equal(duplicate.status, 409);
+  const invalid = await request(path, "POST", { name: "Chef", position: "Chef", email: "bad-email", admin: false });
+  assert.equal(invalid.status, 400);
+  const adminNoEmail = await request(path, "POST", { name: "Chef", position: "Chef", admin: true });
+  assert.equal(adminNoEmail.status, 400);
+  const recipe = await request("/api/recipes", "POST", original("Managed user recipe"), null, "new@example.com");
+  assert.equal(recipe.status, 201);
+  const removed = await request(`${path}/${id}`, "DELETE");
+  assert.equal(removed.status, 200);
+  assert.equal((await request(path)).body.users.some(row => row.id === id), false);
+  assert.equal((await request("/api/session", "GET", undefined, null, "new@example.com")).body.admin, false);
+  const history = await request(`/api/recipes/${recipe.body.slug}`);
+  assert.equal(history.body.activity[0].name, "New chef renamed");
+  assert.equal(history.body.activity[0].position, "Sous");
+});
+
+test("the last admin cannot be removed or demoted, and changes take effect immediately", async () => {
+  const liam = { name: "Liam Goodwill", position: "Exec Chef", email: "liam@woodford.group", admin: false };
+  assert.equal((await request("/api/organisation/liam-goodwill", "PUT", liam)).status, 200);
+  try {
+    assert.equal((await request("/api/session", "GET", undefined, null, liam.email)).body.admin, false);
+    assert.equal((await request("/api/organisation/marc-daffern", "DELETE")).status, 409);
+    assert.equal((await request("/api/organisation/marc-daffern", "PUT", { name: "Marc Daffern", position: "Commis", email: "marc@blackhawkwdown.org.uk", admin: false })).status, 409);
+    assert.equal((await request("/api/session")).body.admin, true);
+  } finally {
+    assert.equal((await request("/api/organisation/liam-goodwill", "PUT", { ...liam, admin: true })).status, 200);
+  }
 });

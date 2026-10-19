@@ -1,3 +1,4 @@
+import { manageOrganisation } from "./organisation.js";
 import { authenticatedPerson, publicActivity } from "./identity.js";
 import { dishFiles } from "../public/js/recipe-files.js";
 import { getRecipeImagePath } from "../public/js/recipe-library.js";
@@ -241,10 +242,12 @@ async function deleteRecipe(env, slug) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const orgMatch = url.pathname.match(/^\/api\/organisation(?:\/([^/]+))?$/);
+    if (orgMatch) return manageOrganisation(request, env, await authenticatedPerson(request, env), orgMatch[1] || null);
     if (url.pathname === "/api/session" && request.method === "GET") {
       const actor = await authenticatedPerson(request, env);
       return Response.json({ authenticated: Boolean(actor), name: actor?.person?.name || null,
-        development: actor?.development === true }, { status: actor ? 200 : 401,
+        admin: actor?.person?.admin === true, development: actor?.development === true }, { status: actor ? 200 : 401,
         headers: { "Cache-Control": "no-store" } });
     }
     if (url.pathname === "/auth/login" && request.method === "GET") {
@@ -319,7 +322,8 @@ export default {
           FROM steps WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id),
         env.DB.prepare("SELECT * FROM recipe_activity WHERE recipe_id = ? ORDER BY occurred_at, id").bind(recipe.id)
       ]);
-      return Response.json({ ...recipe, ingredients: ingredients.results, steps: steps.results, activity: activity.results.map(publicActivity) }, {
+      const people = (await env.DB.prepare("SELECT id, name, position, email FROM organisation_users").all()).results;
+      return Response.json({ ...recipe, ingredients: ingredients.results, steps: steps.results, activity: activity.results.map(row => publicActivity(row, people)) }, {
         headers: { "Cache-Control": "no-store" }
       });
     }

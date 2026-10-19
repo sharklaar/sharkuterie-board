@@ -231,3 +231,14 @@ h2 {
     max-width: none;
   }
 }
+
+.admin-menu { position: fixed; top: 1rem; left: 1rem; z-index: 20; }
+.admin-menu[hidden], #admin-menu-links[hidden] { display: none; }
+#admin-menu-toggle { width: 44px; height: 44px; border: 1px solid #e4d9cf; border-radius: 12px; background: #fffcf7; color: var(--accent-deep); font-size: 1.5rem; cursor: pointer; box-shadow: 0 3px 12px #30201012; }
+#admin-menu-links { margin-top: .5rem; padding: .5rem; background: #fffcf7; border: 1px solid #e4d9cf; border-radius: 12px; box-shadow: 0 8px 24px #30201018; }
+#admin-menu-links a { display: block; padding: .7rem .9rem; color: var(--accent-deep); text-decoration: none; border-radius: 8px; }
+#admin-menu-links a:hover, #admin-menu-links a:focus-visible { background: #f4eee6; }
+
+@media (max-width: 720px) {
+  .has-admin-menu .recipe-form-page { padding-top: 5rem; }
+}

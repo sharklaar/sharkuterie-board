@@ -39,7 +39,8 @@ function escapeHtml(value) {
 
 async function loadDishes() {
   try {
-    if (!await requireSession()) return;
+    const session = await requireSession();
+    if (!session) return;
     const apiResponse = await fetch("/api/recipes");
     if (!apiResponse.ok) throw new Error("Recipe library could not be loaded");
     const data = await apiResponse.json();

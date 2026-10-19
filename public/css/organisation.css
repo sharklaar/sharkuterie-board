@@ -1,0 +1,29 @@
+.organisation-page { max-width: 1100px; }
+.team-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.team-heading h2 { font-family: Georgia, serif; font-size: 1.65rem; }
+#team-count { font: 400 1rem system-ui; color: var(--muted); }
+.team-hint { color: var(--muted); line-height: 1.6; font-size: 0.9rem; }
+.team-table-wrap { overflow-x: auto; background: rgba(255,255,255,.7); border: 1px solid #e4d9cf; border-radius: 14px; }
+.team-table { width: 100%; border-collapse: collapse; text-align: left; font-size: .9rem; }
+.team-table th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; background: #f4eee6; }
+.team-table th, .team-table td { padding: 1rem; border-bottom: 1px solid #e4d9cf; }
+.team-table tr:last-child td { border-bottom: 0; }
+.team-actions { white-space: nowrap; }
+.team-actions button { border: 0; background: none; color: var(--accent-deep); cursor: pointer; padding: .4rem; text-decoration: underline; font: inherit; }
+.team-actions button + button { margin-left: .3rem; color: #8e3434; }
+dialog { width: min(460px, calc(100% - 2rem)); box-sizing: border-box; border: 1px solid #e4d9cf; border-radius: 18px; padding: 1.5rem; background: #fffcf7; color: var(--ink); }
+dialog::backdrop { background: rgba(40,30,20,.35); }
+dialog h2 { margin-top: 0; font-family: Georgia, serif; }
+dialog .form-field { margin-bottom: 1rem; }
+.admin-check { display: flex; align-items: center; gap: .6rem; margin: 1.2rem 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: .75rem; margin-top: 1.5rem; }
+.danger-button { background: #8e3434; }
+#user-error, #remove-error { color: #8e3434; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+.organisation-page .save-button { min-height: 44px; padding: .65rem 1.1rem; border: 1px solid var(--accent-deep); border-radius: 10px; background: var(--accent-deep); color: #fffaf2; font: inherit; font-weight: 700; cursor: pointer; }
+.organisation-page .save-button:hover { background: #732633; }
+.organisation-page .danger-button { background: #8e3434; border-color: #8e3434; }
+#user-form .form-field { display: grid; gap: .5rem; font-size: .9rem; font-weight: 600; }
+#user-form .form-field input { width: 100%; box-sizing: border-box; padding: .75rem; border: 1px solid #cdbab0; border-radius: 9px; background: #fff; font: inherit; font-weight: 400; }
+#user-form input:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.organisation-page :disabled { opacity: .6; cursor: wait; }
