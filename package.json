@@ -6,6 +6,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "predev": "npm run db:migrate:local",
     "dev": "wrangler dev",
     "db:migrate:local": "wrangler d1 migrations apply kitchen-ops --local",
     "db:migrate:remote": "wrangler d1 migrations apply kitchen-ops --remote"
