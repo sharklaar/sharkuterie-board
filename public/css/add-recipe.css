@@ -304,6 +304,7 @@
 }
 
 .remove-ingredient,
+.move-step,
 .remove-step {
   display: grid;
   width: 42px;
@@ -359,9 +360,9 @@
 
 .step-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "title remove"
+    "title actions"
     "section section"
     "instruction instruction"
     "why why";
@@ -398,8 +399,19 @@
   min-height: 64px !important;
 }
 
-.remove-step {
-  grid-area: remove;
+.step-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 0.15rem;
+}
+
+.move-step:hover:not(:disabled) {
+  border-color: #cdbab0;
+  background: #fffefa;
+}
+
+.move-step:disabled {
+  opacity: 0.35;
 }
 
 .form-actions {

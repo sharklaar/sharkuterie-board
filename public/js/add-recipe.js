@@ -189,6 +189,14 @@ function addIngredientRow(ingredient = {}) {
 }
 
 
+function updateStepControls() {
+  const rows = Array.from(stepList.children);
+  rows.forEach((row, index) => {
+    row.querySelector(".move-step-up").disabled = index === 0;
+    row.querySelector(".move-step-down").disabled = index === rows.length - 1;
+  });
+}
+
 function addStepRow(step = {}) {
   const row = document.createElement("div");
   row.className = "step-row";
@@ -212,6 +220,9 @@ function addStepRow(step = {}) {
       rows="2"
     ></textarea>
 
+    <div class="step-actions">
+    <button type="button" class="move-step move-step-up" aria-label="Move step up" title="Move step up">↑</button>
+    <button type="button" class="move-step move-step-down" aria-label="Move step down" title="Move step down">↓</button>
     <button
       type="button"
       class="remove-step"
@@ -219,6 +230,7 @@ function addStepRow(step = {}) {
     >
       ×
     </button>
+    </div>
   `;
 
   const sectionInput = document.createElement("input");
@@ -236,9 +248,22 @@ function addStepRow(step = {}) {
     .querySelector(".remove-step")
     .addEventListener("click", () => {
       row.remove();
+      updateStepControls();
     });
 
+  row.querySelector(".move-step-up").addEventListener("click", () => {
+    const previous = row.previousElementSibling;
+    if (previous) stepList.insertBefore(row, previous);
+    updateStepControls();
+  });
+  row.querySelector(".move-step-down").addEventListener("click", () => {
+    const next = row.nextElementSibling;
+    if (next) stepList.insertBefore(next, row);
+    updateStepControls();
+  });
+
   stepList.appendChild(row);
+  updateStepControls();
 }
 
 
@@ -248,6 +273,7 @@ addStepButton.addEventListener("click", () => addStepRow());
 
 function setDisabled(disabled) {
   for (const control of form.elements) control.disabled = disabled;
+  if (!disabled) updateStepControls();
   form.setAttribute("aria-busy", String(disabled));
 }
 
