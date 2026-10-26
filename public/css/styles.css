@@ -242,3 +242,17 @@ h2 {
 @media (max-width: 720px) {
   .has-admin-menu .recipe-form-page { padding-top: 5rem; }
 }
+
+/* Shared organisation context on the board, recipe form and administration. */
+.organisation-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 1rem; min-height: 68px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.organisation-identity { min-width: 0; font-weight: 700; color: var(--accent-deep); }
+.organisation-identity select { max-width: 100%; min-height: 44px; padding: .5rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: inherit; font: inherit; }
+.organisation-current-user { text-align: right; font-size: .9rem; overflow-wrap: anywhere; }
+body.has-admin-menu .organisation-header { padding-left: 4.5rem; }
+.organisation-header ~ .recipe-user-controls { top: 5.25rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+@media (max-width: 560px) {
+  .organisation-header { gap: .5rem; padding-right: .65rem; }
+  .organisation-identity { flex: 1; font-size: .9rem; }
+  .organisation-current-user { max-width: 40%; font-size: .8rem; }
+}

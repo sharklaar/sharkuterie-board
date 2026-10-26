@@ -1,4 +1,4 @@
-import { requireSession } from "./session.js";
+import { requireSession, organisationFetch } from "./session.js";
 
 const status = document.getElementById("organisation-status");
 const content = document.getElementById("organisation-content");
@@ -14,7 +14,7 @@ let removing = null;
 let busy = false;
 
 async function api(path = "", options = {}) {
-  const response = await fetch(`/api/organisation${path}`, { ...options, cache: "no-store", redirect: "manual" });
+  const response = await organisationFetch(`/api/organisation${path}`, { ...options, cache: "no-store", redirect: "manual" });
   if (response.type === "opaqueredirect" || response.status === 401) {
     await requireSession();
     throw new Error("Your session has expired. Please sign in again.");
@@ -29,7 +29,7 @@ function render() {
   document.getElementById("team-count").textContent = `(${users.length})`;
   for (const user of users) {
     const tr = document.createElement("tr");
-    for (const value of [user.name, user.position, user.email || "Email not added", user.admin ? "Admin" : "Team member"]) {
+    for (const value of [user.name, user.position, user.email || "Email not added", ({ member: "Member", editor: "Editor", admin: "Admin" })[user.access]]) {
       const td = document.createElement("td");
       td.textContent = value;
       tr.append(td);
@@ -60,7 +60,7 @@ function openUser(user = null) {
   form.elements.name.value = user?.name || "";
   form.elements.position.value = user?.position || "";
   form.elements.email.value = user?.email || "";
-  form.elements.admin.checked = user?.admin || false;
+  form.elements.access.value = user?.access || "member";
   userError.textContent = "";
   document.getElementById("user-dialog-title").textContent = user ? "Edit user" : "Add user";
   userDialog.showModal();
@@ -76,7 +76,7 @@ function openRemove(user) {
 
 function setBusy(value) {
   busy = value;
-  document.querySelectorAll("dialog button, dialog input").forEach(control => { control.disabled = value; });
+  document.querySelectorAll("dialog button, dialog input, dialog select").forEach(control => { control.disabled = value; });
 }
 for (const dialog of [userDialog, removeDialog]) {
   dialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
@@ -101,7 +101,7 @@ form.addEventListener("submit", async event => {
   event.preventDefault();
   if (busy) return;
   const body = { name: form.elements.name.value, position: form.elements.position.value,
-    email: form.elements.email.value, admin: form.elements.admin.checked };
+    email: form.elements.email.value, access: form.elements.access.value };
   setBusy(true);
   userError.textContent = "";
   try {

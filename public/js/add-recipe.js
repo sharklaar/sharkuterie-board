@@ -1,5 +1,5 @@
 import { formatIngredientQuantity } from "./ingredient-quantity.js";
-import { requireSession } from "./session.js";
+import { requireSession, organisationFetch, organisationImage } from "./session.js";
 import { dishFiles } from "./recipe-files.js";
 import { getRecipeImagePath } from "./recipe-library.js";
 
@@ -45,7 +45,7 @@ function clearImagePreview() {
 function showCurrentPhoto() {
   clearImagePreview();
   if (currentImagePath) {
-    imagePreviewPhoto.src = currentImagePath;
+    imagePreviewPhoto.src = organisationImage(currentImagePath);
     imageFileName.textContent = "Current recipe photo";
     imagePreview.hidden = false;
   }
@@ -148,7 +148,7 @@ function addIngredientRow(ingredient = {}) {
       suggestionRequest = controller;
 
       try {
-        const response = await fetch(
+        const response = await organisationFetch(
           `/api/ingredients?q=${encodeURIComponent(query)}`,
           { signal: controller.signal }
         );
@@ -296,15 +296,17 @@ async function initialiseEditor() {
   setDisabled(true);
   status.textContent = requestedSlug || requestedFile ? "Loading recipe…" : "";
   try {
-    if (!await requireSession()) return;
+    const session = await requireSession();
+    if (!session) return;
+    if ((requestedSlug || requestedFile) && !session.canEdit) throw new Error("Editor or admin access is required to edit a saved recipe");
     let recipe = null;
     if (requestedSlug) {
-      recipe = await readJson(await fetch(`/api/recipes/${encodeURIComponent(requestedSlug)}`));
+      recipe = await readJson(await organisationFetch(`/api/recipes/${encodeURIComponent(requestedSlug)}`));
     } else if (requestedFile) {
       if (!dishFiles.includes(requestedFile)) throw new Error("Recipe file not found");
-      const saved = await readJson(await fetch(`/api/recipes?source_file=${encodeURIComponent(requestedFile)}`));
+      const saved = await readJson(await organisationFetch(`/api/recipes?source_file=${encodeURIComponent(requestedFile)}`));
       if (saved.recipes.length) {
-        recipe = await readJson(await fetch(`/api/recipes/${encodeURIComponent(saved.recipes[0].slug)}`));
+        recipe = await readJson(await organisationFetch(`/api/recipes/${encodeURIComponent(saved.recipes[0].slug)}`));
       } else {
         throw new Error("This archived recipe is not in the recipe library");
       }
@@ -433,7 +435,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     const endpoint = editingSlug ? `/api/recipes/${encodeURIComponent(editingSlug)}` : "/api/recipes";
-    const response = await fetch(endpoint, {
+    const response = await organisationFetch(endpoint, {
       method: editingSlug ? "PUT" : "POST",
       body: submission
     });
@@ -456,3 +458,5 @@ form.addEventListener("submit", async (event) => {
     saveButton.textContent = editingSlug || sourceFile ? "Save changes" : "Save recipe";
   }
 });
+
+form.addEventListener("input", () => { form.dataset.dirty = "true"; });

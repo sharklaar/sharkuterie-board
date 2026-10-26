@@ -1,5 +1,5 @@
 import { formatIngredientQuantity } from "./ingredient-quantity.js";
-import { requireSession } from "./session.js";
+import { requireSession, organisationFetch, organisationImage } from "./session.js";
 import { getRecipeImagePath } from "./recipe-library.js";
 
 const dishList = document.getElementById("dish-list");
@@ -42,7 +42,7 @@ async function loadDishes() {
   try {
     const session = await requireSession();
     if (!session) return;
-    const apiResponse = await fetch("/api/recipes");
+    const apiResponse = await organisationFetch("/api/recipes");
     if (!apiResponse.ok) throw new Error("Recipe library could not be loaded");
     const data = await apiResponse.json();
     if (!data.recipes.length) {
@@ -65,10 +65,10 @@ async function loadDishes() {
         </button>
         <div class="dish-content">
           <div class="recipe-card-actions">
-            <a class="recipe-edit-link" href="/add-recipe.html?recipe=${encodeURIComponent(recipe.slug)}"
-              aria-label="Edit ${escapeHtml(recipe.name)}">Edit recipe</a>
-            <button class="recipe-delete-button" type="button"
-              aria-label="Delete ${escapeHtml(recipe.name)}">Delete recipe</button>
+            ${session.canEdit ? `<a class="recipe-edit-link" href="/add-recipe.html?recipe=${encodeURIComponent(recipe.slug)}"
+              aria-label="Edit ${escapeHtml(recipe.name)}">Edit recipe</a>` : ""}
+            ${session.admin ? `<button class="recipe-delete-button" type="button"
+              aria-label="Delete ${escapeHtml(recipe.name)}">Delete recipe</button>` : ""}
           </div>
           <div class="database-recipe-content"><p>Loading…</p></div>
         </div>
@@ -116,12 +116,12 @@ async function loadDatabaseRecipe(card) {
   if (card.dataset.loaded === "true") return;
   const content = card.querySelector(".database-recipe-content");
   try {
-    const response = await fetch(`/api/recipes/${encodeURIComponent(card.dataset.slug)}`);
+    const response = await organisationFetch(`/api/recipes/${encodeURIComponent(card.dataset.slug)}`);
     if (!response.ok) throw new Error("Recipe could not be loaded");
     const recipe = await response.json();
     const imagePath = getRecipeImagePath(recipe.image_path);
     const imageHtml = imagePath
-      ? `<img class="database-recipe-image" src="${escapeHtml(imagePath)}" alt="${escapeHtml(recipe.name)}" loading="lazy" />`
+      ? `<img class="database-recipe-image" src="${escapeHtml(organisationImage(imagePath))}" alt="${escapeHtml(recipe.name)}" loading="lazy" />`
       : "";
     const ingredientsHtml = renderGroups(recipe.ingredients, "Ingredients", ingredient => `
       <li>${escapeHtml(formatIngredientQuantity(ingredient.quantity) ?? "")}
@@ -240,7 +240,7 @@ deleteForm.addEventListener("submit", async event => {
   setDeleting(true);
   try {
     if (!await requireSession()) return;
-    const response = await fetch(`/api/recipes/${encodeURIComponent(slug)}`, { method: "DELETE" });
+    const response = await organisationFetch(`/api/recipes/${encodeURIComponent(slug)}`, { method: "DELETE" });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Could not delete recipe. Please try again.");
     card.remove();

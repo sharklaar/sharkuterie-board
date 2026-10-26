@@ -32,7 +32,7 @@
         <label class="form-field"><span>Name</span><input name="name" required maxlength="120" autocomplete="name" /></label>
         <label class="form-field"><span>Position</span><input name="position" required maxlength="120" placeholder="e.g. Sous Chef" /></label>
         <label class="form-field"><span>Email <span class="optional-mark">Optional</span></span><input name="email" type="email" maxlength="254" autocomplete="email" placeholder="Add when available" /></label>
-        <label class="admin-check"><input name="admin" type="checkbox" /> Admin</label>
+        <label class="form-field"><span>Access</span><select name="access"><option value="member">Member — view and create recipes</option><option value="editor">Editor — also edit recipes</option><option value="admin">Admin — full organisation access</option></select></label>
         <p id="user-error" role="alert"></p>
         <div class="dialog-actions"><button class="secondary-button" id="cancel-user" type="button">Cancel</button><button class="save-button" type="submit">Save user</button></div>
       </form>

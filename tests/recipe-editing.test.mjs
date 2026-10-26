@@ -25,13 +25,14 @@ before(async () => {
       .map(path => ({ type: "ESModule", path })),
     bindings: { ACCESS_ISSUER: "https://test-access.example", ACCESS_AUD: "test-aud" },
     outboundService: async () => Response.json({ keys: [publicJwk] }),
+    serviceBindings: { ASSETS: async () => new Response("Static asset") },
     compatibilityDate: "2026-09-22",
     d1Databases: ["DB"],
     r2Buckets: ["IMAGES"]
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql", "migrations/0007_correct_marc_email.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql", "migrations/0007_correct_marc_email.sql", "migrations/0008_organisations.sql", "migrations/0009_organisation_types_and_test_member.sql"]) {
     if (path.endsWith("0004_ingredient_quantity_text.sql")) {
       await db.prepare("INSERT INTO recipes (id, name, slug) VALUES (9000, 'Migration recipe', 'migration-recipe')").run();
       for (const [index, quantity, unit] of [[0, 200, "g"], [1, 0.5, "tsp"], [2, null, "to taste"], [3, 0, null], [4, null, null]]) {
@@ -48,7 +49,7 @@ before(async () => {
 
 after(async () => { await runtime?.dispose(); });
 
-async function request(path, method = "GET", recipe, photo, email) {
+async function request(path, method = "GET", recipe, photo, email, organisation) {
   let body;
   let headers;
   if (photo) {
@@ -62,7 +63,7 @@ async function request(path, method = "GET", recipe, photo, email) {
     body = JSON.stringify(recipe);
     headers = { "Content-Type": "application/json" };
   }
-  headers = { ...headers, "Cf-Access-Jwt-Assertion": await accessToken(email) };
+  headers = { ...headers, "Cf-Access-Jwt-Assertion": await accessToken(email), ...(organisation ? { "X-Organisation-Id": organisation } : {}) };
   const response = await runtime.dispatchFetch(`http://localhost${path}`, { method, body, headers });
   return { status: response.status, body: await response.json() };
 }
@@ -318,11 +319,18 @@ test("local development identity is accepted only on loopback and never deployed
   }));
   try {
     const localDb = await localRuntime.getD1Database("DB");
-    const sql = (await readFile("migrations/0006_organisation.sql", "utf8")) + (await readFile("migrations/0007_correct_marc_email.sql", "utf8"));
-    for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) await localDb.prepare(statement).run();
+    for (const path of ["0001_initial_schema", "0002_recipe_editing", "0003_recipe_yield", "0004_ingredient_quantity_text", "0005_recipe_activity", "0006_organisation", "0007_correct_marc_email", "0008_organisations", "0009_organisation_types_and_test_member"]) {
+      const sql = await readFile(`migrations/${path}.sql`, "utf8");
+      for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) await localDb.prepare(statement).run();
+    }
     const local = await localRuntime.dispatchFetch("http://localhost/api/session");
     assert.equal(local.status, 200);
-    assert.deepEqual(await local.json(), { authenticated: true, name: "Marc Daffern", email: "marc@blackhawkdown.org.uk", admin: true, development: true });
+    const session = await local.json();
+    assert.equal(session.name, "Marc Daffern");
+    assert.equal(session.development, true);
+    assert.equal(session.admin, true);
+    assert.equal(session.organisation.id, "william-cecil");
+    assert.equal(session.organisations.length, 2);
     const hosted = await localRuntime.dispatchFetch("https://kitchen-ops.marcs-apps.workers.dev/api/session");
     assert.equal(hosted.status, 401);
   } finally { await localRuntime.dispose(); }
@@ -393,4 +401,152 @@ test("ingredient quantities compact measurement symbols and space countable item
   const edited = await request(`/api/recipes/${created.body.slug}`, "PUT", { ...recipe, ingredients: [{ name: "Stock", quantity: 2, unit: "boxes" }, { name: "Flour", quantity: 200, unit: "g" }] });
   assert.equal(edited.status, 200);
   assert.deepEqual((await request(`/api/recipes/${created.body.slug}`)).body.ingredients.map(row => row.quantity), ["2 boxes", "200g"]);
+});
+
+const familyRequest = (path, method = "GET", body, email = "marc@blackhawkdown.org.uk", photo) =>
+  request(path, method, body, photo, email, "daffern-family");
+
+test("migration seeds two isolated organisations and preserves existing membership permissions", async () => {
+  const hotel = await request("/api/session");
+  assert.deepEqual(hotel.body.organisation, { id: "william-cecil", name: "William Cecil", type: "professional" });
+  assert.equal(hotel.body.canEdit, true);
+  assert.equal(hotel.body.organisations.length, 2);
+  const family = await familyRequest("/api/session");
+  assert.equal(family.body.organisation.name, "Daffern Family");
+  assert.equal(family.body.access, "admin");
+  const users = (await familyRequest("/api/organisation")).body.users;
+  assert.deepEqual(users.map(user => [user.name, user.position, user.access]), [
+    ["Marc", "Chef", "member"], ["Marc Daffern", "Chef", "admin"], ["Toby Daffern", "Mush", "member"], ["William Daffern", "Mush", "member"]
+  ]);
+  const toby = await request("/api/session", "GET", undefined, null, "toby.daffern@outlook.com");
+  assert.equal(toby.body.organisations.length, 1);
+  assert.equal(toby.body.organisation.id, "daffern-family");
+  assert.equal(toby.body.canEdit, false);
+  const alex = await request("/api/session", "GET", undefined, null, "alex_biggs@hotmail.com");
+  assert.equal(alex.body.access, "member");
+  assert.equal(alex.body.organisations.length, 1);
+  assert.equal((await db.prepare("SELECT organisation_id FROM recipes WHERE id = 9000").first()).organisation_id, "william-cecil");
+});
+
+test("organisations cannot read, change or discover each other's recipes and ingredients", async () => {
+  assert.equal((await familyRequest("/api/recipes")).body.recipes.length, 0);
+  const hotel = await request("/api/recipes", "POST", { name: "Shared dish name", ingredients: [{ name: "HotelSecretIngredient" }] });
+  const family = await familyRequest("/api/recipes", "POST", { name: "Shared dish name", ingredients: [{ name: "FamilySecretIngredient" }] });
+  assert.equal(hotel.status, 201);
+  assert.equal(family.status, 201);
+  assert.notEqual(hotel.body.slug, family.body.slug);
+  assert.equal((await familyRequest("/api/recipes", "POST", { name: "Shared dish name" })).status, 409);
+  assert.equal((await familyRequest(`/api/recipes/${hotel.body.slug}`)).status, 404);
+  assert.equal((await familyRequest(`/api/recipes/${hotel.body.slug}`, "PUT", { name: "Attempted overwrite" })).status, 404);
+  assert.equal((await familyRequest(`/api/recipes/${hotel.body.slug}`, "DELETE")).status, 404);
+  assert.equal((await request(`/api/recipes/${family.body.slug}`)).status, 404);
+  assert.equal((await request(`/api/recipes/${family.body.slug}`, "PUT", { name: "Attempted overwrite" })).status, 404);
+  assert.equal((await request(`/api/recipes/${family.body.slug}`, "DELETE")).status, 404);
+  assert.equal((await familyRequest("/api/ingredients?q=Hotel")).body.ingredients.length, 0);
+  assert.equal((await request("/api/ingredients?q=Family")).body.ingredients.length, 0);
+  assert.deepEqual((await familyRequest("/api/ingredients?q=Family")).body.ingredients, ["FamilySecretIngredient"]);
+  assert.equal((await familyRequest("/api/recipes?source_file=dishes%2Fsalmon-ceviche.html")).body.recipes.length, 0);
+  assert.equal((await familyRequest("/api/recipes", "POST", { name: "Steal archived recipe", source_file: "dishes/salmon-ceviche.html" })).status, 400);
+  assert.equal((await request(`/api/recipes/${hotel.body.slug}`)).body.name, "Shared dish name");
+});
+
+test("unlisted users and forged organisation selections cannot access organisation data", async () => {
+  for (const path of ["/api/recipes", "/api/ingredients?q=Butter", "/api/organisation"]) {
+    assert.equal((await request(path, "GET", undefined, null, "stranger@example.com")).status, 403);
+    assert.equal((await request(path, "GET", undefined, null, "toby.daffern@outlook.com", "william-cecil")).status, 403);
+    assert.equal((await request(path, "GET", undefined, null, undefined, "does-not-exist")).status, 403);
+    assert.equal((await runtime.dispatchFetch(`http://localhost${path}`)).status, 401);
+  }
+  assert.equal((await request("/api/recipes", "POST", { name: "Unlisted recipe" }, null, "stranger@example.com")).status, 403);
+  const session = await request("/api/session", "GET", undefined, null, "stranger@example.com");
+  assert.equal(session.body.organisation, null);
+  assert.deepEqual(session.body.organisations, []);
+});
+
+test("members create but cannot edit their own recipes; editors edit but cannot delete or manage members", async () => {
+  const email = "toby.daffern@outlook.com";
+  const created = await familyRequest("/api/recipes", "POST", { name: "Toby recipe", organisation_id: "william-cecil" }, email);
+  assert.equal(created.status, 201);
+  assert.equal(created.body.organisation_id, "daffern-family");
+  const path = `/api/recipes/${created.body.slug}`;
+  assert.equal((await familyRequest(path, "PUT", { name: "New name" }, email)).status, 403);
+  assert.equal((await familyRequest(path, "DELETE", undefined, email)).status, 403);
+  assert.equal((await familyRequest("/api/organisation", "GET", undefined, email)).status, 403);
+  assert.equal((await familyRequest("/api/organisation/daffern-family-toby", "PUT", {
+    name: "Toby Daffern", position: "Mush", email, access: "editor"
+  })).status, 200);
+  try {
+    assert.equal((await familyRequest("/api/session", "GET", undefined, email)).body.canEdit, true);
+    assert.equal((await familyRequest(path, "PUT", { name: "Updated by editor" }, email)).status, 200);
+    assert.equal((await familyRequest(path, "DELETE", undefined, email)).status, 403);
+    assert.equal((await familyRequest("/api/organisation", "POST", { name: "Intruder", position: "Chef", access: "admin", email: "intruder@example.com" }, email)).status, 403);
+  } finally {
+    await familyRequest("/api/organisation/daffern-family-toby", "PUT", { name: "Toby Daffern", position: "Mush", email, access: "member" });
+  }
+});
+
+test("admin powers and last-admin protection are scoped to each organisation", async () => {
+  assert.equal((await familyRequest("/api/organisation/marc-daffern", "DELETE")).status, 409);
+  assert.equal((await familyRequest("/api/organisation/liam-goodwill", "PUT", { name: "Changed", position: "Chef", email: "liam@woodford.group", access: "member" })).status, 409);
+  assert.equal((await familyRequest("/api/organisation/daffern-family-marc", "DELETE")).status, 409);
+  assert.equal((await familyRequest("/api/organisation/daffern-family-marc", "PUT", { name: "Marc Daffern", position: "Chef", email: "marc@blackhawkdown.org.uk", access: "editor" })).status, 409);
+  assert.equal((await familyRequest("/api/session")).body.admin, true);
+  const added = await request("/api/organisation", "POST", { name: "Toby at work", position: "Commis", email: "toby.daffern@outlook.com", access: "member" });
+  assert.equal(added.status, 201);
+  assert.equal((await familyRequest("/api/session", "GET", undefined, "toby.daffern@outlook.com")).body.organisations.length, 2);
+  assert.equal((await request(`/api/organisation/${added.body.id}`, "DELETE")).status, 200);
+  assert.equal((await request("/api/recipes", "GET", undefined, null, "toby.daffern@outlook.com", "william-cecil")).status, 403);
+  assert.equal((await familyRequest("/api/session", "GET", undefined, "toby.daffern@outlook.com")).body.organisations.length, 1);
+});
+
+test("uploaded photos require membership of their owning organisation and cannot be cached publicly", async () => {
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const created = await familyRequest("/api/recipes", "POST", { name: "Private family photo" }, undefined, png);
+  assert.equal(created.status, 201);
+  const photo = created.body.image_path;
+  const url = `http://localhost${photo}?organisation=daffern-family`;
+  const headers = { "Cf-Access-Jwt-Assertion": await accessToken("toby.daffern@outlook.com") };
+  const allowed = await runtime.dispatchFetch(url, { headers });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("Cache-Control"), "private, no-store");
+  assert.equal((await runtime.dispatchFetch(url)).status, 401);
+  assert.equal((await runtime.dispatchFetch(url, { headers: { "Cf-Access-Jwt-Assertion": await accessToken("liam@woodford.group") } })).status, 403);
+  assert.equal((await runtime.dispatchFetch(`http://localhost${photo}`, { headers: { "Cf-Access-Jwt-Assertion": await accessToken() } })).status, 404);
+  assert.equal((await request(`/api/recipes/${created.body.slug}`, "GET")).status, 404);
+});
+
+
+test("legacy photo files cannot bypass membership checks through static asset routing", async () => {
+  const photo = "http://localhost/images/salmon-ceviche.jpg";
+  const allowed = await runtime.dispatchFetch(photo, { headers: { "Cf-Access-Jwt-Assertion": await accessToken() } });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("Cache-Control"), "private, no-store");
+  assert.equal((await runtime.dispatchFetch(photo)).status, 404);
+  assert.equal((await runtime.dispatchFetch(photo, { headers: { "Cf-Access-Jwt-Assertion": await accessToken("toby.daffern@outlook.com") } })).status, 404);
+  for (const path of ["/imag%65s/salmon-ceviche.jpg", "/images%2Fsalmon-ceviche.jpg", "/%2569mages/salmon-ceviche.jpg"]) {
+    assert.equal((await runtime.dispatchFetch(`http://localhost${path}`)).status, 404);
+  }
+  assert.deepEqual((await db.prepare("PRAGMA foreign_key_check").all()).results, []);
+});
+
+
+test("Marc's test email has only Member access to the Lite family organisation", async () => {
+  const email = "marcdaffern@hotmail.com";
+  const session = await request("/api/session", "GET", undefined, null, email);
+  assert.equal(session.status, 200);
+  assert.equal(session.body.name, "Marc");
+  assert.equal(session.body.access, "member");
+  assert.equal(session.body.admin, false);
+  assert.equal(session.body.canEdit, false);
+  assert.deepEqual(session.body.organisations, [{ id: "daffern-family", name: "Daffern Family", type: "lite" }]);
+  assert.equal(session.body.organisation.type, "lite");
+  assert.equal((await request("/api/recipes", "GET", undefined, null, email, "william-cecil")).status, 403);
+  assert.equal((await familyRequest("/api/organisation", "GET", undefined, email)).status, 403);
+  const created = await familyRequest("/api/recipes", "POST", { name: "Marc test member recipe" }, email);
+  assert.equal(created.status, 201);
+  assert.equal((await familyRequest(`/api/recipes/${created.body.slug}`, "PUT", { name: "Cannot edit own recipe" }, email)).status, 403);
+  assert.equal((await familyRequest(`/api/recipes/${created.body.slug}`, "DELETE", undefined, email)).status, 403);
+  const primary = await familyRequest("/api/session");
+  assert.equal(primary.body.access, "admin");
+  assert.equal(primary.body.organisations.length, 2);
 });

@@ -43,7 +43,7 @@ function getImageType(bytes) {
 
 
 const RECIPE_COLUMNS = `id, name, slug, description, yield,
-  image_path, source_file, notes, created_at, updated_at`;
+  image_path, source_file, notes, created_at, updated_at, organisation_id`;
 
 class RecipeError extends Error {
   constructor(message, status = 400) {
@@ -100,6 +100,7 @@ function normaliseRows(rows, kind) {
 }
 
 async function saveRecipe(request, env, slug, actor) {
+  const organisationId = actor.person.organisation_id;
   let uploadedKey = null;
   let saved = false;
   try {
@@ -136,18 +137,22 @@ async function saveRecipe(request, env, slug, actor) {
     const notes = optionalText(body.notes, "Recipe notes");
 
     const existing = slug
-      ? await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ?`).bind(slug).first()
+      ? await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ? AND organisation_id = ?`).bind(slug, organisationId).first()
       : null;
     if (slug && !existing) throw new RecipeError("Recipe not found", 404);
 
     // Source identity belongs to the saved record and survives name changes.
     const sourceFile = existing ? existing.source_file : optionalText(body.source_file, "Recipe source");
-    if (sourceFile && !dishFiles.includes(sourceFile)) throw new RecipeError("Recipe source is invalid");
+    if (sourceFile && (organisationId !== "william-cecil" || !dishFiles.includes(sourceFile))) throw new RecipeError("Recipe source is invalid");
     if (!existing && sourceFile) {
-      const converted = await env.DB.prepare("SELECT id FROM recipes WHERE source_file = ?").bind(sourceFile).first();
+      const converted = await env.DB.prepare("SELECT id FROM recipes WHERE source_file = ? AND organisation_id = ?").bind(sourceFile, organisationId).first();
       if (converted) throw new RecipeError("This recipe already has a saved version. Reload the editor to edit it.", 409);
     }
-    const recipeSlug = existing?.slug || makeSlug(name) || crypto.randomUUID();
+    const baseSlug = makeSlug(name) || crypto.randomUUID();
+    // Preserve hotel URLs; a stable namespace lets other organisations use the
+    // same names while the database still rejects duplicate creates atomically.
+    const recipeSlug = existing?.slug || (organisationId === "william-cecil"
+      ? baseSlug : `${organisationId}--${baseSlug}`);
     let imagePath = existing?.image_path || (sourceFile ? getRecipeImagePath(body.image_path) : null);
     if (body.remove_image === true) imagePath = null;
 
@@ -171,9 +176,9 @@ async function saveRecipe(request, env, slug, actor) {
       statements.push(env.DB.prepare("DELETE FROM steps WHERE recipe_id = ?").bind(existing.id));
     } else {
       statements.push(env.DB.prepare(`
-        INSERT INTO recipes (name, slug, description, yield, image_path, source_file, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
-      `).bind(name, recipeSlug, description, recipeYield, imagePath, sourceFile, notes));
+        INSERT INTO recipes (name, slug, description, yield, image_path, source_file, notes, organisation_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
+      `).bind(name, recipeSlug, description, recipeYield, imagePath, sourceFile, notes, organisationId));
     }
     for (const [index, ingredient] of ingredients.entries()) {
       statements.push(env.DB.prepare(`
@@ -220,14 +225,14 @@ async function saveRecipe(request, env, slug, actor) {
   }
 }
 
-async function deleteRecipe(env, slug) {
+async function deleteRecipe(env, slug, organisationId) {
   try {
     // Delete the whole recipe atomically, including databases created before migrations.
     const results = await env.DB.batch([
-      env.DB.prepare("DELETE FROM recipe_activity WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
-      env.DB.prepare("DELETE FROM ingredients WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
-      env.DB.prepare("DELETE FROM steps WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ?)").bind(slug),
-      env.DB.prepare("DELETE FROM recipes WHERE slug = ? RETURNING slug").bind(slug)
+      env.DB.prepare("DELETE FROM recipe_activity WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ? AND organisation_id = ?)").bind(slug, organisationId),
+      env.DB.prepare("DELETE FROM ingredients WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ? AND organisation_id = ?)").bind(slug, organisationId),
+      env.DB.prepare("DELETE FROM steps WHERE recipe_id = (SELECT id FROM recipes WHERE slug = ? AND organisation_id = ?)").bind(slug, organisationId),
+      env.DB.prepare("DELETE FROM recipes WHERE slug = ? AND organisation_id = ? RETURNING slug").bind(slug, organisationId)
     ]);
     const recipe = results[3].results[0];
     if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
@@ -243,13 +248,23 @@ async function deleteRecipe(env, slug) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Public paths and IDs use ASCII slugs. Reject encoded path variants so the
+    // asset server cannot decode a protected image path past this router.
+    if (url.pathname.includes("%")) return new Response("Not found", { status: 404 });
+    const protectedPath = url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/recipe-images/");
+    const actor = protectedPath ? await authenticatedPerson(request, env) : null;
+    if (protectedPath && !actor) return Response.json({ error: "Please sign in.", authenticated: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    if (protectedPath && !actor.person && url.pathname !== "/api/session") return Response.json({ error: "You do not have access to this organisation." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+    const organisationId = actor?.person?.organisation_id;
     const orgMatch = url.pathname.match(/^\/api\/organisation(?:\/([^/]+))?$/);
-    if (orgMatch) return manageOrganisation(request, env, await authenticatedPerson(request, env), orgMatch[1] || null);
+    if (orgMatch) return manageOrganisation(request, env, actor, orgMatch[1] || null);
     if (url.pathname === "/api/session" && request.method === "GET") {
-      const actor = await authenticatedPerson(request, env);
-      return Response.json({ authenticated: Boolean(actor), name: actor?.person?.name || null, email: actor?.email || null,
-        admin: actor?.person?.admin === true, development: actor?.development === true }, { status: actor ? 200 : 401,
-        headers: { "Cache-Control": "no-store" } });
+      return Response.json({ authenticated: true, name: actor.person?.name || null, email: actor.email,
+        admin: actor.person?.admin === true, access: actor.person?.access || null,
+        canEdit: ["editor", "admin"].includes(actor.person?.access), development: actor.development === true,
+        organisation: actor.person ? { id: organisationId, name: actor.person.organisation_name, type: actor.person.organisation_type } : null,
+        organisations: actor.memberships.map(row => ({ id: row.organisation_id, name: row.organisation_name, type: row.organisation_type }))
+      }, { headers: { "Cache-Control": "no-store" } });
     }
     if (url.pathname === "/auth/login" && request.method === "GET") {
       const requested = url.searchParams.get("returnTo") || "/";
@@ -276,11 +291,14 @@ export default {
       if (!/^recipe-images\/[a-f0-9-]+\.(?:jpg|png|webp|avif)$/i.test(key)) {
         return new Response("Image not found", { status: 404 });
       }
+      const owner = await env.DB.prepare("SELECT id FROM recipes WHERE organisation_id = ? AND image_path = ?")
+        .bind(organisationId, `/media/${key}`).first();
+      if (!owner) return new Response("Image not found", { status: 404, headers: { "Cache-Control": "no-store" } });
       const image = await env.IMAGES.get(key);
       if (!image) return new Response("Image not found", { status: 404 });
       const headers = new Headers();
       image.writeHttpMetadata(headers);
-      headers.set("Cache-Control", "public, max-age=31536000, immutable");
+      headers.set("Cache-Control", "private, no-store");
       headers.set("X-Content-Type-Options", "nosniff");
       if (image.httpEtag) headers.set("ETag", image.httpEtag);
       return new Response(image.body, { headers });
@@ -288,14 +306,15 @@ export default {
 
     if (url.pathname === "/api/ingredients" && request.method === "GET") {
       const query = url.searchParams.get("q")?.trim() || "";
-      if (query.length < 2) return Response.json({ ingredients: [] });
+      if (query.length < 2) return Response.json({ ingredients: [] }, { headers: { "Cache-Control": "no-store" } });
       const escapedQuery = query.replace(/[!%_]/g, "!$&");
       const ingredients = await env.DB.prepare(`
         SELECT DISTINCT TRIM(name) AS name FROM ingredients
-        WHERE TRIM(name) COLLATE NOCASE LIKE ? ESCAPE '!'
+        WHERE recipe_id IN (SELECT id FROM recipes WHERE organisation_id = ?)
+          AND TRIM(name) COLLATE NOCASE LIKE ? ESCAPE '!'
         ORDER BY name COLLATE NOCASE LIMIT 10
-      `).bind(`${escapedQuery}%`).all();
-      return Response.json({ ingredients: ingredients.results.map(ingredient => ingredient.name) });
+      `).bind(organisationId, `${escapedQuery}%`).all();
+      return Response.json({ ingredients: ingredients.results.map(ingredient => ingredient.name) }, { headers: { "Cache-Control": "no-store" } });
     }
 
     if (url.pathname === "/api/recipes" && request.method === "GET") {
@@ -303,19 +322,19 @@ export default {
       const recipes = await env.DB.prepare(`
         SELECT ${RECIPE_COLUMNS},
           (SELECT GROUP_CONCAT(name, ' ') FROM ingredients WHERE recipe_id = recipes.id) AS ingredient_names
-        FROM recipes ${sourceFile ? "WHERE source_file = ?" : ""} ORDER BY name
-      `).bind(...(sourceFile ? [sourceFile] : [])).all();
+        FROM recipes WHERE organisation_id = ? ${sourceFile ? "AND source_file = ?" : ""} ORDER BY name
+      `).bind(organisationId, ...(sourceFile ? [sourceFile] : [])).all();
       return Response.json({ recipes: recipes.results }, { headers: { "Cache-Control": "no-store" } });
     }
 
     const recipeMatch = url.pathname.match(/^\/api\/recipes\/([^/]+)$/);
     const slug = recipeMatch ? decodeURIComponent(recipeMatch[1]) : null;
     if (slug && request.method === "DELETE") {
-      if (!await authenticatedPerson(request, env)) return Response.json({ error: "Please sign in through Cloudflare Access to change recipes." }, { status: 401 });
-      return deleteRecipe(env, slug);
+      if (!actor.person.admin) return Response.json({ error: "Only admins can delete recipes." }, { status: 403 });
+      return deleteRecipe(env, slug, organisationId);
     }
     if (slug && request.method === "GET") {
-      const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ?`).bind(slug).first();
+      const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ? AND organisation_id = ?`).bind(slug, organisationId).first();
       if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
       const [ingredients, steps, activity] = await env.DB.batch([
         env.DB.prepare(`SELECT quantity, name, notes, sort_order, section
@@ -324,15 +343,22 @@ export default {
           FROM steps WHERE recipe_id = ? ORDER BY sort_order`).bind(recipe.id),
         env.DB.prepare("SELECT * FROM recipe_activity WHERE recipe_id = ? ORDER BY occurred_at, id").bind(recipe.id)
       ]);
-      const people = (await env.DB.prepare("SELECT id, name, position, email FROM organisation_users").all()).results;
+      const people = (await env.DB.prepare("SELECT id, name, position, email FROM organisation_users WHERE organisation_id = ?").bind(organisationId).all()).results;
       return Response.json({ ...recipe, ingredients: ingredients.results.map(row => ({ ...row, quantity: formatIngredientQuantity(row.quantity) })), steps: steps.results, activity: activity.results.map(row => publicActivity(row, people)) }, {
         headers: { "Cache-Control": "no-store" }
       });
     }
     if ((url.pathname === "/api/recipes" && request.method === "POST") || (slug && request.method === "PUT")) {
-      const actor = await authenticatedPerson(request, env);
-      if (!actor) return Response.json({ error: "Please sign in through Cloudflare Access to save recipes." }, { status: 401 });
+      if (slug && !["editor", "admin"].includes(actor.person.access)) return Response.json({ error: "Editor or admin access is required to edit recipes." }, { status: 403 });
       return saveRecipe(request, env, slug, actor);
+    }
+    if (url.pathname.startsWith("/dishes/") || url.pathname.startsWith("/images/")) {
+      const archivedActor = await authenticatedPerson(request, env);
+      if (!archivedActor?.memberships.some(row => row.organisation_id === "william-cecil")) return new Response("Not found", { status: 404 });
+      const response = await env.ASSETS.fetch(request);
+      const headers = new Headers(response.headers);
+      headers.set("Cache-Control", "private, no-store");
+      return new Response(response.body, { status: response.status, headers });
     }
     return env.ASSETS.fetch(request);
   }
