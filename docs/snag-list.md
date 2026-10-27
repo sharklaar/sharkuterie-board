@@ -1,6 +1,6 @@
 # Snag list
 
-Checked items are implemented locally; the organisation changes still need production migration and deployment.
+Checked items are live. The organisation foundation and both production migrations were released on 27 October 2026. Signed-in verification of the primary and Hotmail accounts remains a manual follow-up.
 
 ## Completed
 
