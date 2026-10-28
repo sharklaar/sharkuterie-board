@@ -14,6 +14,10 @@ The organisation foundation was released on 27 October 2026. Recipe sections wer
 - [x] Test membership: Marc, marcdaffern@hotmail.com, Member access to Daffern Family only. Primary Marc account retains Admin access to both organisations.
 - [x] Store organisation type: William Cecil = Professional; Daffern Family = Lite. This records the distinction; the feature sets below still need implementation.
 
+## Recipe editor
+
+- [x] Remove the redundant Step title and Method section fields from method steps, simplifying step entry around the instruction and optional Why. Existing step titles and sections are preserved when editing or reordering saved recipes. Implemented locally; deployment pending.
+
 ## Release workflow
 
 - [ ] Add a single coordinated release workflow: verify required migrations, back up production when schema changes are pending, apply migrations in the correct order, deploy the matching Worker and smoke-test. Keep a recovery record and distinguish additive migrations from releases requiring maintenance. Avoid separate manual “push”, “migrate” and “deploy” hand-offs that can leave code and schema out of sync.

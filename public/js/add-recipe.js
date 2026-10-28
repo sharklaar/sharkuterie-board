@@ -202,12 +202,6 @@ function addStepRow(step = {}) {
   row.className = "step-row";
 
   row.innerHTML = `
-    <input
-      type="text"
-      class="step-title"
-      placeholder="Step title"
-    />
-
     <textarea
       class="step-instruction"
       placeholder="Instruction"
@@ -233,13 +227,11 @@ function addStepRow(step = {}) {
     </div>
   `;
 
-  const sectionInput = document.createElement("input");
-  sectionInput.type = "text";
-  sectionInput.className = "step-section";
-  sectionInput.placeholder = "Method section (optional), e.g. prep or plating";
-  row.appendChild(sectionInput);
-  for (const [field, value] of Object.entries({ title: step.title,
-    instruction: step.instruction, why: step.why, section: step.section })) {
+  // Retain legacy metadata when an existing step is edited or reordered.
+  row.dataset.title = step.title ?? "";
+  row.dataset.section = step.section ?? "";
+  for (const [field, value] of Object.entries({
+    instruction: step.instruction, why: step.why })) {
     row.querySelector(`.step-${field}`).value = value ?? "";
   }
   row.querySelectorAll("input, textarea").forEach(input => input.setAttribute("aria-label", input.placeholder));
@@ -394,11 +386,7 @@ form.addEventListener("submit", async (event) => {
     .map(row => {
       return {
 
-        title:
-          row
-            .querySelector(".step-title")
-            .value
-            .trim() || null,
+        title: row.dataset.title || null,
 
         instruction:
           row
@@ -406,7 +394,7 @@ form.addEventListener("submit", async (event) => {
             .value
             .trim(),
 
-        section: row.querySelector(".step-section").value.trim() || null,
+        section: row.dataset.section || null,
 
         why:
           row

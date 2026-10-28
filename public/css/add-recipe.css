@@ -362,9 +362,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "title actions"
-    "section section"
-    "instruction instruction"
+    "instruction actions"
     "why why";
   gap: 0.65rem;
   align-items: start;
@@ -372,14 +370,6 @@
   border: 1px solid #e4d9cf;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.7);
-}
-
-.step-title {
-  grid-area: title;
-}
-
-.step-section {
-  grid-area: section;
 }
 
 .step-instruction {
