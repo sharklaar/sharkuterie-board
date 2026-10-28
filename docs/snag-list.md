@@ -1,6 +1,6 @@
 # Snag list
 
-The organisation foundation was released on 27 October 2026. Recipe sections are implemented locally on the current feature branch and still need release. Signed-in verification of the primary and Hotmail accounts remains a manual follow-up.
+The organisation foundation was released on 27 October 2026. Recipe sections were released on 28 October 2026. Signed-in verification of the primary and Hotmail accounts remains a manual follow-up.
 
 ## Completed
 
@@ -14,10 +14,14 @@ The organisation foundation was released on 27 October 2026. Recipe sections are
 - [x] Test membership: Marc, marcdaffern@hotmail.com, Member access to Daffern Family only. Primary Marc account retains Admin access to both organisations.
 - [x] Store organisation type: William Cecil = Professional; Daffern Family = Lite. This records the distinction; the feature sets below still need implementation.
 
+## Release workflow
+
+- [ ] Add a single coordinated release workflow: verify required migrations, back up production when schema changes are pending, apply migrations in the correct order, deploy the matching Worker and smoke-test. Keep a recovery record and distinguish additive migrations from releases requiring maintenance. Avoid separate manual “push”, “migrate” and “deploy” hand-offs that can leave code and schema out of sync.
+
 ## Organisation feature sets
 
 - [ ] Define and enforce the Lite and Professional feature sets in both UI and API. Lite retains the family recipe library; professional kitchen workflows below belong to Professional organisations.
-- [x] Professional-only recipe sections (local): admins add, rename and remove sections; recipes have one optional section. William Cecil starts with Larder, Sauce, Pastry and Shared; all its existing recipes are assigned to Larder. Daffern Family has no sections. Removing a section leaves recipes unassigned.
+- [x] Professional-only recipe sections (released 28 October 2026): admins add, rename and remove sections; recipes have one optional section. William Cecil starts with Larder, Sauce, Pastry and Shared; all its existing recipes are assigned to Larder. Daffern Family has no sections. Removing a section leaves recipes unassigned.
 - Staff section assignments were dropped: staff float between sections. Section selection/access for future prep lists is deferred until that workflow is designed.
 - [ ] Organisation-specific skin and branding.
 - [ ] Explicitly enable and verify mobile keyboard autocorrect and spellcheck.
