@@ -25,7 +25,27 @@
         <thead><tr><th scope="col">Name</th><th scope="col">Position</th><th scope="col">Email</th><th scope="col">Access</th><th scope="col">Actions</th></tr></thead>
         <tbody id="team-users"></tbody>
       </table></div>
+      <section id="section-management" hidden aria-labelledby="sections-heading">
+        <div class="team-heading"><h2 id="sections-heading">Recipe sections</h2><button id="add-section" class="save-button" type="button">+ Add section</button></div>
+        <p class="team-hint">Recipes can optionally belong to one section. Removing a section leaves its recipes unassigned.</p>
+        <ul id="section-list" class="section-list"></ul>
+        <p id="section-status" role="status" aria-live="polite"></p>
+      </section>
     </section>
+    <dialog id="section-dialog" aria-labelledby="section-dialog-title">
+      <form id="section-form">
+        <h2 id="section-dialog-title">Add section</h2>
+        <label class="form-field"><span>Section name</span><input name="name" required maxlength="80" /></label>
+        <p id="section-error" role="alert"></p>
+        <div class="dialog-actions"><button class="secondary-button" id="cancel-section" type="button">Cancel</button><button class="save-button" type="submit">Save section</button></div>
+      </form>
+    </dialog>
+    <dialog id="delete-section-dialog" aria-labelledby="delete-section-title">
+      <h2 id="delete-section-title">Remove section?</h2>
+      <p id="delete-section-description"></p><p>Its recipes will be preserved and left unassigned.</p>
+      <p id="delete-section-error" role="alert"></p>
+      <div class="dialog-actions"><button class="secondary-button" id="cancel-delete-section" type="button" autofocus>Cancel</button><button class="save-button danger-button" id="confirm-delete-section" type="button">Remove section</button></div>
+    </dialog>
     <dialog id="user-dialog" aria-labelledby="user-dialog-title">
       <form id="user-form">
         <h2 id="user-dialog-title">Add user</h2>

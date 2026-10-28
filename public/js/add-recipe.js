@@ -299,6 +299,17 @@ async function initialiseEditor() {
     const session = await requireSession();
     if (!session) return;
     if ((requestedSlug || requestedFile) && !session.canEdit) throw new Error("Editor or admin access is required to edit a saved recipe");
+    if (session.organisation.type === "professional") {
+      const data = await readJson(await organisationFetch("/api/sections"));
+      const select = form.elements.namedItem("section_id");
+      for (const section of data.sections) {
+        const option = document.createElement("option");
+        option.value = section.id;
+        option.textContent = section.name;
+        select.append(option);
+      }
+      document.getElementById("recipe-section-field").hidden = false;
+    }
     let recipe = null;
     if (requestedSlug) {
       recipe = await readJson(await organisationFetch(`/api/recipes/${encodeURIComponent(requestedSlug)}`));
@@ -314,7 +325,7 @@ async function initialiseEditor() {
     if (recipe) {
       editingSlug = recipe.slug || null;
       sourceFile = recipe.source_file || null;
-      for (const name of ["name", "description", "yield", "notes"]) {
+      for (const name of ["name", "description", "yield", "notes", "section_id"]) {
         form.elements.namedItem(name).value = recipe[name] ?? "";
       }
       (recipe.ingredients.length ? recipe.ingredients : [{}]).forEach(addIngredientRow);
@@ -412,6 +423,7 @@ form.addEventListener("submit", async (event) => {
     description: formData.get("description"),
     yield: formData.get("yield"),
     notes: formData.get("notes"),
+    section_id: formData.get("section_id") || null,
     source_file: sourceFile,
     image_path: currentImagePath,
     remove_image: removeImage,

@@ -56,3 +56,39 @@ export async function manageOrganisation(request, env, actor, id) {
     return json({ error: "Could not update the organisation." }, 500);
   }
 }
+
+export async function manageSections(request, env, actor, id) {
+  const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+  if (!actor?.person) return json({ error: "Organisation access is required." }, 403);
+  if (actor.person.organisation_type !== "professional") return json({ error: "Sections are available to Professional organisations only." }, 403);
+  const org = actor.person.organisation_id;
+  if (request.method === "GET" && !id) {
+    const rows = await env.DB.prepare("SELECT id, name FROM recipe_sections WHERE organisation_id = ? ORDER BY name COLLATE NOCASE").bind(org).all();
+    return json({ sections: rows.results });
+  }
+  if (!actor.person.admin) return json({ error: "Only admins can manage sections." }, 403);
+  if (!((request.method === "POST" && !id) || (id && ["PUT", "DELETE"].includes(request.method)))) return json({ error: "Method not allowed" }, 405);
+  try {
+    if (request.method === "DELETE") {
+      // The foreign key clears recipe assignments atomically, preserving recipes.
+      const row = await env.DB.prepare("DELETE FROM recipe_sections WHERE id = ? AND organisation_id = ? RETURNING id").bind(id, org).first();
+      return row ? json({ deleted: true }) : json({ error: "Section not found." }, 404);
+    }
+    if (!request.headers.get("content-type")?.includes("application/json")) return json({ error: "Section details must be JSON." }, 400);
+    const body = await request.json();
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 80) return json({ error: "Enter a section name of up to 80 characters." }, 400);
+    if (!id) {
+      const sectionId = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO recipe_sections (id, organisation_id, name) VALUES (?, ?, ?)").bind(sectionId, org, name).run();
+      return json({ id: sectionId, name }, 201);
+    }
+    const row = await env.DB.prepare("UPDATE recipe_sections SET name = ? WHERE id = ? AND organisation_id = ? RETURNING id, name").bind(name, id, org).first();
+    return row ? json(row) : json({ error: "Section not found." }, 404);
+  } catch (error) {
+    if (error instanceof SyntaxError) return json({ error: "Section details could not be read." }, 400);
+    if (error.message?.includes("UNIQUE")) return json({ error: "A section with that name already exists." }, 409);
+    console.error(error);
+    return json({ error: "Could not update sections." }, 500);
+  }
+}

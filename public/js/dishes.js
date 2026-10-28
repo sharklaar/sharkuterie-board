@@ -60,7 +60,7 @@ async function loadDishes() {
         data-slug="${escapeHtml(recipe.slug)}">
         <button class="dish-toggle" type="button" aria-expanded="false">
           <span><strong>${escapeHtml(recipe.name)}</strong><br />
-            <span class="dish-meta">${escapeHtml(recipe.description || "Recipe")}</span>
+            <span class="dish-meta">${escapeHtml(recipe.description || "Recipe")}${recipe.section_name ? ` · ${escapeHtml(recipe.section_name)}` : ""}</span>
           </span>
         </button>
         <div class="dish-content">
@@ -134,7 +134,7 @@ async function loadDatabaseRecipe(card) {
         ${step.why ? `<p class="step-explanation">${escapeHtml(step.why)}</p>` : ""}
       </li>
     `);
-    const facts = [recipe.yield ? `Yield: ${recipe.yield}` : ""].filter(Boolean);
+    const facts = [recipe.section_name ? `Section: ${recipe.section_name}` : "", recipe.yield ? `Yield: ${recipe.yield}` : ""].filter(Boolean);
     const activity = (recipe.activity || []).map(event => {
       const date = new Date(event.occurred_at.replace(" ", "T") + "Z");
       const formatted = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "Europe/London" }).format(date);

@@ -28,3 +28,13 @@ dialog .form-field { margin-bottom: 1rem; }
 #user-form input:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
 .organisation-page :disabled { opacity: .6; cursor: wait; }
 #user-form .form-field select { width: 100%; padding: .75rem; border: 1px solid #cdbab0; border-radius: 9px; background: #fff; font: inherit; font-weight: 400; }
+#section-management { margin-top: 2rem; }
+#section-management[hidden] { display: none; }
+.section-list { list-style: none; padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.section-list:empty { display: none; }
+.section-list li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; background: #fffcf7; }
+.section-list li + li { border-top: 1px solid var(--line); }
+.section-list li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+#section-form .form-field { display: grid; gap: .5rem; }
+#section-form input { width: 100%; padding: .75rem; border: 1px solid #cdbab0; border-radius: 9px; font: inherit; }
+#section-error, #delete-section-error { color: #8e3434; }

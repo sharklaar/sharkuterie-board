@@ -524,3 +524,5 @@
     animation-duration: 0.01ms !important;
   }
 }
+#recipe-section-field[hidden] { display: none; }
+#recipe-section { width: 100%; min-height: 44px; padding: .75rem; border: 1px solid #cdbab0; border-radius: 10px; background: #fffefa; color: var(--ink); font: inherit; }

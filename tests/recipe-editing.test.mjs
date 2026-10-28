@@ -32,7 +32,7 @@ before(async () => {
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql", "migrations/0007_correct_marc_email.sql", "migrations/0008_organisations.sql", "migrations/0009_organisation_types_and_test_member.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql", "migrations/0007_correct_marc_email.sql", "migrations/0008_organisations.sql", "migrations/0009_organisation_types_and_test_member.sql", "migrations/0010_recipe_sections.sql"]) {
     if (path.endsWith("0004_ingredient_quantity_text.sql")) {
       await db.prepare("INSERT INTO recipes (id, name, slug) VALUES (9000, 'Migration recipe', 'migration-recipe')").run();
       for (const [index, quantity, unit] of [[0, 200, "g"], [1, 0.5, "tsp"], [2, null, "to taste"], [3, 0, null], [4, null, null]]) {
@@ -40,9 +40,17 @@ before(async () => {
           .bind(9000 + index, quantity, unit, index).run();
       }
     }
+    if (path.endsWith("0010_recipe_sections.sql")) {
+      await db.prepare("INSERT INTO recipes (id, name, slug, organisation_id) VALUES (9100, 'Existing family migration fixture', 'family-migration-fixture', 'daffern-family')").run();
+    }
     const sql = await readFile(path, "utf8");
     for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) {
       await db.prepare(statement).run();
+    }
+    if (path.endsWith("0010_recipe_sections.sql")) {
+      const family = await db.prepare("SELECT section_id FROM recipes WHERE id = 9100").first();
+      assert.equal(family.section_id, null, "existing family recipes must stay unassigned");
+      await db.prepare("DELETE FROM recipes WHERE id = 9100").run();
     }
   }
 });
@@ -319,7 +327,7 @@ test("local development identity is accepted only on loopback and never deployed
   }));
   try {
     const localDb = await localRuntime.getD1Database("DB");
-    for (const path of ["0001_initial_schema", "0002_recipe_editing", "0003_recipe_yield", "0004_ingredient_quantity_text", "0005_recipe_activity", "0006_organisation", "0007_correct_marc_email", "0008_organisations", "0009_organisation_types_and_test_member"]) {
+    for (const path of ["0001_initial_schema", "0002_recipe_editing", "0003_recipe_yield", "0004_ingredient_quantity_text", "0005_recipe_activity", "0006_organisation", "0007_correct_marc_email", "0008_organisations", "0009_organisation_types_and_test_member", "0010_recipe_sections"]) {
       const sql = await readFile(`migrations/${path}.sql`, "utf8");
       for (const statement of sql.split(";").map(value => value.trim()).filter(Boolean)) await localDb.prepare(statement).run();
     }
@@ -549,4 +557,85 @@ test("Marc's test email has only Member access to the Lite family organisation",
   const primary = await familyRequest("/api/session");
   assert.equal(primary.body.access, "admin");
   assert.equal(primary.body.organisations.length, 2);
+});
+
+test("section migration seeds William Cecil and assigns its existing recipes to Larder", async () => {
+  const sections = await request("/api/sections");
+  assert.equal(sections.status, 200);
+  assert.deepEqual(sections.body.sections.map(row => row.name), ["Larder", "Pastry", "Sauce", "Shared"]);
+  const recipe = await request("/api/recipes/migration-recipe");
+  assert.equal(recipe.body.section_id, "william-cecil-larder");
+  assert.equal(recipe.body.section_name, "Larder");
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM recipe_sections WHERE organisation_id = 'daffern-family'").first()).n, 0);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM recipes WHERE organisation_id = 'daffern-family' AND section_id IS NOT NULL").first()).n, 0);
+});
+
+test("admins manage sections; renaming updates recipe labels and deleting preserves recipe contents", async () => {
+  const created = await request("/api/sections", "POST", { name: "  Development  " });
+  assert.equal(created.status, 201);
+  const id = created.body.id;
+  assert.equal(created.body.name, "Development");
+  const recipe = await request("/api/recipes", "POST", { ...original("Section lifecycle recipe"), section_id: id });
+  assert.equal(recipe.status, 201);
+  const before = (await request(`/api/recipes/${recipe.body.slug}`)).body;
+  assert.equal(before.section_name, "Development");
+  const renamed = await request(`/api/sections/${id}`, "PUT", { name: "Development kitchen" });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.body.id, id);
+  assert.equal((await request(`/api/recipes/${recipe.body.slug}`)).body.section_name, "Development kitchen");
+  assert.equal((await request("/api/recipes")).body.recipes.find(row => row.id === recipe.body.id).section_name, "Development kitchen");
+  assert.equal((await request(`/api/sections/${id}`, "DELETE")).status, 200);
+  const after = (await request(`/api/recipes/${recipe.body.slug}`)).body;
+  assert.equal(after.section_id, null);
+  assert.equal(after.section_name, null);
+  for (const key of ["id", "slug", "name", "ingredients", "steps", "activity", "created_at", "updated_at"]) assert.deepEqual(after[key], before[key]);
+  assert.equal((await request(`/api/sections/${id}`, "DELETE")).status, 404);
+  assert.equal((await request(`/api/sections/${id}`, "PUT", { name: "Missing" })).status, 404);
+});
+
+test("section names are validated and unique within an organisation", async () => {
+  for (const name of ["", "   ", "x".repeat(81), null, 42, {}, []]) {
+    assert.equal((await request("/api/sections", "POST", { name })).status, 400);
+  }
+  assert.equal((await request("/api/sections", "POST", { name: " larder " })).status, 409);
+  assert.equal((await request("/api/sections/william-cecil-sauce", "PUT", { name: "LARDER" })).status, 409);
+});
+
+test("members can list and assign sections when creating but only admins manage them", async () => {
+  const email = "alex_biggs@hotmail.com";
+  assert.equal((await request("/api/sections", "GET", undefined, null, email)).status, 200);
+  for (const [path, method, body] of [["/api/sections", "POST", { name: "Forbidden" }], ["/api/sections/william-cecil-larder", "PUT", { name: "Forbidden" }], ["/api/sections/william-cecil-larder", "DELETE"]]) {
+    assert.equal((await request(path, method, body, null, email)).status, 403);
+  }
+  const recipe = await request("/api/recipes", "POST", { name: "Member assigned recipe", section_id: "william-cecil-sauce" }, null, email);
+  assert.equal(recipe.status, 201);
+  assert.equal(recipe.body.section_id, "william-cecil-sauce");
+  assert.equal((await request(`/api/recipes/${recipe.body.slug}`, "PUT", { name: "Changed", section_id: "william-cecil-pastry" }, null, email)).status, 403);
+  const edited = await request(`/api/recipes/${recipe.body.slug}`, "PUT", { name: "Assigned by admin", section_id: "william-cecil-pastry" });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.body.section_id, "william-cecil-pastry");
+  assert.equal((await request(`/api/recipes/${recipe.body.slug}`, "PUT", { name: "Legacy edit without section" })).body.section_id, "william-cecil-pastry");
+  assert.equal((await request(`/api/recipes/${recipe.body.slug}`, "PUT", { name: "Explicitly unassigned", section_id: null })).body.section_id, null);
+  assert.equal((await request("/api/recipes", "POST", { name: "Optional section" })).body.section_id, null);
+  for (const section_id of ["not-real", 42, {}]) assert.equal((await request("/api/recipes", "POST", { name: "Bad section", section_id })).status, 400);
+});
+
+test("sections are unavailable to Lite organisations and cannot be accessed across organisations", async () => {
+  for (const [path, method, body] of [["/api/sections", "GET"], ["/api/sections", "POST", { name: "Forbidden" }], ["/api/sections/william-cecil-larder", "PUT", { name: "Forbidden" }], ["/api/sections/william-cecil-larder", "DELETE"]]) {
+    assert.equal((await familyRequest(path, method, body)).status, 403);
+  }
+  assert.equal((await familyRequest("/api/recipes", "POST", { name: "Family section blocked", section_id: "william-cecil-larder" })).status, 400);
+  await db.prepare("INSERT INTO organisations (id, name, type) VALUES ('section-test', 'Other professional kitchen', 'professional')").run();
+  await db.prepare("INSERT INTO organisation_users (id, name, position, email, admin, access, organisation_id) VALUES ('section-admin', 'Other admin', 'Chef', 'section-admin@example.com', 1, 'admin', 'section-test')").run();
+  const other = (path, method = "GET", body) => request(path, method, body, null, "section-admin@example.com", "section-test");
+  assert.deepEqual((await other("/api/sections")).body.sections, []);
+  const created = await other("/api/sections", "POST", { name: "Larder" });
+  assert.equal(created.status, 201);
+  const foreign = created.body.id;
+  assert.equal((await request(`/api/sections/${foreign}`, "PUT", { name: "Stolen" })).status, 404);
+  assert.equal((await request(`/api/sections/${foreign}`, "DELETE")).status, 404);
+  assert.equal((await request("/api/recipes", "POST", { name: "Foreign section", section_id: foreign })).status, 400);
+  assert.equal((await other("/api/recipes", "POST", { name: "Foreign hotel section", section_id: "william-cecil-larder" })).status, 400);
+  assert.equal((await other("/api/sections/william-cecil-larder", "DELETE")).status, 404);
+  assert.deepEqual((await db.prepare("PRAGMA foreign_key_check").all()).results, []);
 });

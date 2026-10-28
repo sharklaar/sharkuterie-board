@@ -100,3 +100,12 @@ Recipe lists, reads, writes, ingredient suggestions, source-file lookups and upl
 Before production deployment, export a remote D1 backup and rehearse the migration against a copy of production data. Apply the remote migration during a maintenance window and deploy the matching Worker immediately afterward: older clients/code do not enforce the new permissions. Verify both organisations, existing recipe counts/history and photo access. Local migrations do **not** change production. Cloudflare Access must separately allow each person's email to sign in; adding a membership does not change Access policies or send an invitation email.
 
 Migration `0009_organisation_types_and_test_member.sql` identifies William Cecil as `professional` and Daffern Family as `lite`, and adds Marc (`marcdaffern@hotmail.com`, position Chef) as a Member of Daffern Family only. The main Marc account keeps both Admin memberships. Organisation type is returned in session data; section, shift checklist and prep list workflows remain on the snag list and are intended for Professional organisations. This migration does not change Cloudflare Access policies.
+
+
+## Recipe sections
+
+Migration `0010_recipe_sections.sql` adds optional recipe sections for Professional organisations. William Cecil starts with Larder, Sauce, Pastry and Shared, and all recipes belonging to William Cecil at migration time are assigned to Larder without changing their IDs, contents, timestamps or history. Other organisations' recipes remain unchanged. New recipes default to Unassigned.
+
+Admins add, rename and remove sections under Manage Organisation. Members can select a section while creating recipes; changing a saved recipe's section follows the existing Editor/Admin permission rule. Renaming a section updates its displayed name across recipes. Removing it atomically clears recipe assignments and preserves recipes. Section names are unique within their organisation, ignoring case. The API rejects foreign organisation sections and all section operations for Lite organisations. Ingredient and method group headings remain independent of recipe sections.
+
+Staff are not assigned to sections. Shared behaves like an ordinary section. Prep lists and their access rules are deferred. Apply the migration before deploying this code; it is additive and the previous Worker remains compatible with the migrated schema.

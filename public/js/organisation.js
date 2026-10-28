@@ -1,5 +1,7 @@
 import { requireSession, organisationFetch } from "./session.js";
 
+import { initialiseSections } from "./organisation-sections.js";
+
 const status = document.getElementById("organisation-status");
 const content = document.getElementById("organisation-content");
 const tbody = document.getElementById("team-users");
@@ -132,5 +134,6 @@ try {
     await load();
     content.hidden = false;
     status.textContent = "";
+    await initialiseSections(session);
   }
 } catch (error) { status.textContent = error.message; }

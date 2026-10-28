@@ -1,5 +1,5 @@
 import { formatIngredientQuantity } from "../public/js/ingredient-quantity.js";
-import { manageOrganisation } from "./organisation.js";
+import { manageOrganisation, manageSections } from "./organisation.js";
 import { authenticatedPerson, publicActivity } from "./identity.js";
 import { dishFiles } from "../public/js/recipe-files.js";
 import { getRecipeImagePath } from "../public/js/recipe-library.js";
@@ -43,7 +43,7 @@ function getImageType(bytes) {
 
 
 const RECIPE_COLUMNS = `id, name, slug, description, yield,
-  image_path, source_file, notes, created_at, updated_at, organisation_id`;
+  image_path, source_file, notes, created_at, updated_at, organisation_id, section_id`;
 
 class RecipeError extends Error {
   constructor(message, status = 400) {
@@ -141,6 +141,13 @@ async function saveRecipe(request, env, slug, actor) {
       : null;
     if (slug && !existing) throw new RecipeError("Recipe not found", 404);
 
+    const sectionId = body.section_id === undefined ? existing?.section_id || null : optionalText(body.section_id, "Recipe section");
+    if (sectionId) {
+      if (actor.person.organisation_type !== "professional") throw new RecipeError("Sections are available to Professional organisations only");
+      const section = await env.DB.prepare("SELECT id FROM recipe_sections WHERE id = ? AND organisation_id = ?").bind(sectionId, organisationId).first();
+      if (!section) throw new RecipeError("That section is no longer available. Choose another section or leave it unassigned.");
+    }
+
     // Source identity belongs to the saved record and survives name changes.
     const sourceFile = existing ? existing.source_file : optionalText(body.source_file, "Recipe source");
     if (sourceFile && (organisationId !== "william-cecil" || !dishFiles.includes(sourceFile))) throw new RecipeError("Recipe source is invalid");
@@ -169,16 +176,16 @@ async function saveRecipe(request, env, slug, actor) {
     if (existing) {
       statements.push(env.DB.prepare(`
         UPDATE recipes SET name = ?, description = ?, yield = ?,
-          image_path = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+          image_path = ?, notes = ?, section_id = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? RETURNING ${RECIPE_COLUMNS}
-      `).bind(name, description, recipeYield, imagePath, notes, existing.id));
+      `).bind(name, description, recipeYield, imagePath, notes, sectionId, existing.id));
       statements.push(env.DB.prepare("DELETE FROM ingredients WHERE recipe_id = ?").bind(existing.id));
       statements.push(env.DB.prepare("DELETE FROM steps WHERE recipe_id = ?").bind(existing.id));
     } else {
       statements.push(env.DB.prepare(`
-        INSERT INTO recipes (name, slug, description, yield, image_path, source_file, notes, organisation_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
-      `).bind(name, recipeSlug, description, recipeYield, imagePath, sourceFile, notes, organisationId));
+        INSERT INTO recipes (name, slug, description, yield, image_path, source_file, notes, organisation_id, section_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
+      `).bind(name, recipeSlug, description, recipeYield, imagePath, sourceFile, notes, organisationId, sectionId));
     }
     for (const [index, ingredient] of ingredients.entries()) {
       statements.push(env.DB.prepare(`
@@ -214,6 +221,7 @@ async function saveRecipe(request, env, slug, actor) {
       try { await env.IMAGES.delete(uploadedKey); } catch (cleanupError) { console.error(cleanupError); }
     }
     if (error instanceof RecipeError) return Response.json({ error: error.message }, { status: error.status });
+    if (error.message?.includes("FOREIGN KEY")) return Response.json({ error: "The selected section was removed. Reload the available sections and try again." }, { status: 409 });
     if (error.message?.includes("UNIQUE constraint failed")) {
       const message = error.message.includes("source_file")
         ? "This recipe already has a saved version. Reload the editor to edit it."
@@ -256,6 +264,8 @@ export default {
     if (protectedPath && !actor) return Response.json({ error: "Please sign in.", authenticated: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
     if (protectedPath && !actor.person && url.pathname !== "/api/session") return Response.json({ error: "You do not have access to this organisation." }, { status: 403, headers: { "Cache-Control": "no-store" } });
     const organisationId = actor?.person?.organisation_id;
+    const sectionMatch = url.pathname.match(/^\/api\/sections(?:\/([^/]+))?$/);
+    if (sectionMatch) return manageSections(request, env, actor, sectionMatch[1] || null);
     const orgMatch = url.pathname.match(/^\/api\/organisation(?:\/([^/]+))?$/);
     if (orgMatch) return manageOrganisation(request, env, actor, orgMatch[1] || null);
     if (url.pathname === "/api/session" && request.method === "GET") {
@@ -321,6 +331,7 @@ export default {
       const sourceFile = url.searchParams.get("source_file");
       const recipes = await env.DB.prepare(`
         SELECT ${RECIPE_COLUMNS},
+          (SELECT name FROM recipe_sections WHERE id = recipes.section_id AND organisation_id = recipes.organisation_id) AS section_name,
           (SELECT GROUP_CONCAT(name, ' ') FROM ingredients WHERE recipe_id = recipes.id) AS ingredient_names
         FROM recipes WHERE organisation_id = ? ${sourceFile ? "AND source_file = ?" : ""} ORDER BY name
       `).bind(organisationId, ...(sourceFile ? [sourceFile] : [])).all();
@@ -334,7 +345,9 @@ export default {
       return deleteRecipe(env, slug, organisationId);
     }
     if (slug && request.method === "GET") {
-      const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ? AND organisation_id = ?`).bind(slug, organisationId).first();
+      const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS},
+        (SELECT name FROM recipe_sections WHERE id = recipes.section_id AND organisation_id = recipes.organisation_id) AS section_name
+        FROM recipes WHERE slug = ? AND organisation_id = ?`).bind(slug, organisationId).first();
       if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
       const [ingredients, steps, activity] = await env.DB.batch([
         env.DB.prepare(`SELECT quantity, name, notes, sort_order, section
