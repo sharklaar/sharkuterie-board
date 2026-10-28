@@ -33,15 +33,17 @@ The organisation foundation was released on 27 October 2026. Recipe sections wer
 - [ ] Store the day's full status when a user checks out, with user/time attribution and durable audit history.
 - [ ] Make reset boundaries follow the organisation's local timezone; initial UK venue uses Europe/London. Preserve previous records rather than clearing history.
 
-## Professional: prep lists
+## Professional: prep lists — paused
+
+See [deferred design notes](prep-list-design-notes.md). The latest inclusion-flag proposal is not yet a settled design; no prep-list implementation has started.
 
 - [ ] Admins create prep lists and select dishes from that organisation's recipe library.
-- [ ] Adding a dish adds each ingredient row to the prep list, preserving its quantity, notes and recipe provenance.
+- [ ] Decide explicit inclusion of prep-worthy recipe items. The original “copy every ingredient” idea is under review because raw ingredients are not necessarily prep tasks. Preserve quantities, notes and source provenance for included items.
 - [ ] Free-text notes area for instructions outside the usual prep items.
 - [ ] Each item has two checkboxes: To do and Done.
 - [ ] Store every prep list for audit purposes, preserving dated versions/status changes and attribution rather than overwriting history.
 - [ ] Define section access for prep lists to suit floating staff. Admins can access any section's prep list within their organisation; prep list behaviour is deferred.
-- [ ] Default to today's list for the member's section, with a date selector to move backward/forward.
+- [ ] Default to today's list for the selected section, with a date selector to move backward/forward. Staff do not have fixed section assignments.
 - [ ] Allow future planning, including marking tomorrow's items To do.
 
 ## Decisions needed before implementing the professional workflows
