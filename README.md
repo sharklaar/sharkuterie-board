@@ -109,3 +109,9 @@ Migration `0010_recipe_sections.sql` adds optional recipe sections for Professio
 Admins add, rename and remove sections under Manage Organisation. Members can select a section while creating recipes; changing a saved recipe's section follows the existing Editor/Admin permission rule. Renaming a section updates its displayed name across recipes. Removing it atomically clears recipe assignments and preserves recipes. Section names are unique within their organisation, ignoring case. The API rejects foreign organisation sections and all section operations for Lite organisations. Ingredient and method group headings remain independent of recipe sections.
 
 Staff are not assigned to sections. Shared behaves like an ordinary section. Prep lists and their access rules are deferred. Apply the migration before deploying this code; it is additive and the previous Worker remains compatible with the migrated schema.
+
+## Private recipes
+
+Apply additive migration `0011_private_recipes.sql` before deploying the private-recipe option. Existing recipes remain shared; known creator memberships are backfilled from creation history. New recipes record the authenticated creator, and the editor offers “Keep this recipe private”. Private recipes are visible only to that creator within their organisation, including API reads, list/source lookups, ingredient suggestions and uploaded photos. Other admins cannot view them. Only the creator can change privacy; existing editing/deletion role permissions still apply. Recipes with unknown historical creators remain shared.
+
+Back up production and rehearse the migration before applying it remotely. Deploy the matching Worker immediately afterwards: the previous Worker does not enforce recipe privacy. Once private recipes exist, do not roll back to a Worker without privacy enforcement.

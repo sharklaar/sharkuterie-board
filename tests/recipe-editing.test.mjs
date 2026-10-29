@@ -32,7 +32,7 @@ before(async () => {
   }));
   db = await runtime.getD1Database("DB");
   images = await runtime.getR2Bucket("IMAGES");
-  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql", "migrations/0007_correct_marc_email.sql", "migrations/0008_organisations.sql", "migrations/0009_organisation_types_and_test_member.sql", "migrations/0010_recipe_sections.sql"]) {
+  for (const path of ["migrations/0001_initial_schema.sql", "migrations/0002_recipe_editing.sql", "migrations/0003_recipe_yield.sql", "migrations/0004_ingredient_quantity_text.sql", "migrations/0005_recipe_activity.sql", "migrations/0006_organisation.sql", "migrations/0007_correct_marc_email.sql", "migrations/0008_organisations.sql", "migrations/0009_organisation_types_and_test_member.sql", "migrations/0010_recipe_sections.sql", "migrations/0011_private_recipes.sql"]) {
     if (path.endsWith("0004_ingredient_quantity_text.sql")) {
       await db.prepare("INSERT INTO recipes (id, name, slug) VALUES (9000, 'Migration recipe', 'migration-recipe')").run();
       for (const [index, quantity, unit] of [[0, 200, "g"], [1, 0.5, "tsp"], [2, null, "to taste"], [3, 0, null], [4, null, null]]) {
@@ -638,4 +638,33 @@ test("sections are unavailable to Lite organisations and cannot be accessed acro
   assert.equal((await other("/api/recipes", "POST", { name: "Foreign hotel section", section_id: "william-cecil-larder" })).status, 400);
   assert.equal((await other("/api/sections/william-cecil-larder", "DELETE")).status, 404);
   assert.deepEqual((await db.prepare("PRAGMA foreign_key_check").all()).results, []);
+});
+
+
+test("private recipes restrict lists, direct reads, writes, photos and suggestions to their creator", async () => {
+  const created = await request("/api/recipes", "POST", {
+    ...original("Private recipe test"), is_private: true,
+    ingredients: [{ name: "Privateuniquebutter" }], creator_id: "forged"
+  }, new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+  assert.equal(created.status, 201);
+  const path = `/api/recipes/${created.body.slug}`;
+  assert.equal((await request(path)).status, 200);
+  const other = "alex_biggs@hotmail.com";
+  const otherRequest = (url, method = "GET", body) => request(url, method, body, null, other);
+  assert.equal((await otherRequest(path)).status, 404);
+  assert.ok(!(await otherRequest("/api/recipes")).body.recipes.some(row => row.slug === created.body.slug));
+  assert.deepEqual((await otherRequest("/api/ingredients?q=Privateunique")).body.ingredients, []);
+  await db.prepare("UPDATE organisation_users SET admin = 1, access = 'admin' WHERE lower(email) = ?").bind(other).run();
+  try {
+    assert.equal((await otherRequest(path, "PUT", { name: "Stolen", is_private: false })).status, 404);
+    assert.equal((await otherRequest(path, "DELETE")).status, 404);
+    const photo = new URL(created.body.image_path, "http://localhost");
+    assert.equal((await runtime.dispatchFetch(photo, { headers: { "Cf-Access-Jwt-Assertion": await accessToken(other) } })).status, 404);
+    assert.equal((await runtime.dispatchFetch(photo, { headers: { "Cf-Access-Jwt-Assertion": await accessToken() } })).status, 200);
+    assert.equal((await request(path, "PUT", { ...original("Private recipe test"), is_private: false })).status, 200);
+    assert.equal((await otherRequest(path)).status, 200);
+    assert.equal((await otherRequest(path, "PUT", { name: "Cannot privatise", is_private: true })).status, 403);
+  } finally {
+    await db.prepare("UPDATE organisation_users SET admin = 0, access = 'member' WHERE lower(email) = ?").bind(other).run();
+  }
 });

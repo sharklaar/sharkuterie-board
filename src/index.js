@@ -43,7 +43,9 @@ function getImageType(bytes) {
 
 
 const RECIPE_COLUMNS = `id, name, slug, description, yield,
-  image_path, source_file, notes, created_at, updated_at, organisation_id, section_id`;
+  image_path, source_file, notes, created_at, updated_at, organisation_id, section_id, is_private, creator_id`;
+
+const VISIBLE_RECIPE = "(is_private = 0 OR creator_id = ?)";
 
 class RecipeError extends Error {
   constructor(message, status = 400) {
@@ -139,7 +141,13 @@ async function saveRecipe(request, env, slug, actor) {
     const existing = slug
       ? await env.DB.prepare(`SELECT ${RECIPE_COLUMNS} FROM recipes WHERE slug = ? AND organisation_id = ?`).bind(slug, organisationId).first()
       : null;
-    if (slug && !existing) throw new RecipeError("Recipe not found", 404);
+    if (slug && (!existing || (existing.is_private && existing.creator_id !== actor.person.id))) throw new RecipeError("Recipe not found", 404);
+
+    if (body.is_private !== undefined && typeof body.is_private !== "boolean") throw new RecipeError("Private must be true or false");
+    const isPrivate = body.is_private === undefined ? Boolean(existing?.is_private) : body.is_private;
+    if (existing && isPrivate !== Boolean(existing.is_private) && existing.creator_id !== actor.person.id) {
+      throw new RecipeError("Only the creator can change recipe privacy", 403);
+    }
 
     const sectionId = body.section_id === undefined ? existing?.section_id || null : optionalText(body.section_id, "Recipe section");
     if (sectionId) {
@@ -176,16 +184,16 @@ async function saveRecipe(request, env, slug, actor) {
     if (existing) {
       statements.push(env.DB.prepare(`
         UPDATE recipes SET name = ?, description = ?, yield = ?,
-          image_path = ?, notes = ?, section_id = ?, updated_at = CURRENT_TIMESTAMP
+          image_path = ?, notes = ?, section_id = ?, is_private = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? RETURNING ${RECIPE_COLUMNS}
-      `).bind(name, description, recipeYield, imagePath, notes, sectionId, existing.id));
+      `).bind(name, description, recipeYield, imagePath, notes, sectionId, Number(isPrivate), existing.id));
       statements.push(env.DB.prepare("DELETE FROM ingredients WHERE recipe_id = ?").bind(existing.id));
       statements.push(env.DB.prepare("DELETE FROM steps WHERE recipe_id = ?").bind(existing.id));
     } else {
       statements.push(env.DB.prepare(`
-        INSERT INTO recipes (name, slug, description, yield, image_path, source_file, notes, organisation_id, section_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
-      `).bind(name, recipeSlug, description, recipeYield, imagePath, sourceFile, notes, organisationId, sectionId));
+        INSERT INTO recipes (name, slug, description, yield, image_path, source_file, notes, organisation_id, section_id, is_private, creator_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${RECIPE_COLUMNS}
+      `).bind(name, recipeSlug, description, recipeYield, imagePath, sourceFile, notes, organisationId, sectionId, Number(isPrivate), actor.person.id));
     }
     for (const [index, ingredient] of ingredients.entries()) {
       statements.push(env.DB.prepare(`
@@ -301,8 +309,8 @@ export default {
       if (!/^recipe-images\/[a-f0-9-]+\.(?:jpg|png|webp|avif)$/i.test(key)) {
         return new Response("Image not found", { status: 404 });
       }
-      const owner = await env.DB.prepare("SELECT id FROM recipes WHERE organisation_id = ? AND image_path = ?")
-        .bind(organisationId, `/media/${key}`).first();
+      const owner = await env.DB.prepare(`SELECT id FROM recipes WHERE organisation_id = ? AND image_path = ? AND ${VISIBLE_RECIPE}`)
+        .bind(organisationId, `/media/${key}`, actor.person.id).first();
       if (!owner) return new Response("Image not found", { status: 404, headers: { "Cache-Control": "no-store" } });
       const image = await env.IMAGES.get(key);
       if (!image) return new Response("Image not found", { status: 404 });
@@ -320,10 +328,10 @@ export default {
       const escapedQuery = query.replace(/[!%_]/g, "!$&");
       const ingredients = await env.DB.prepare(`
         SELECT DISTINCT TRIM(name) AS name FROM ingredients
-        WHERE recipe_id IN (SELECT id FROM recipes WHERE organisation_id = ?)
+        WHERE recipe_id IN (SELECT id FROM recipes WHERE organisation_id = ? AND ${VISIBLE_RECIPE})
           AND TRIM(name) COLLATE NOCASE LIKE ? ESCAPE '!'
         ORDER BY name COLLATE NOCASE LIMIT 10
-      `).bind(organisationId, `${escapedQuery}%`).all();
+      `).bind(organisationId, actor.person.id, `${escapedQuery}%`).all();
       return Response.json({ ingredients: ingredients.results.map(ingredient => ingredient.name) }, { headers: { "Cache-Control": "no-store" } });
     }
 
@@ -333,21 +341,23 @@ export default {
         SELECT ${RECIPE_COLUMNS},
           (SELECT name FROM recipe_sections WHERE id = recipes.section_id AND organisation_id = recipes.organisation_id) AS section_name,
           (SELECT GROUP_CONCAT(name, ' ') FROM ingredients WHERE recipe_id = recipes.id) AS ingredient_names
-        FROM recipes WHERE organisation_id = ? ${sourceFile ? "AND source_file = ?" : ""} ORDER BY name
-      `).bind(organisationId, ...(sourceFile ? [sourceFile] : [])).all();
+        FROM recipes WHERE organisation_id = ? AND ${VISIBLE_RECIPE} ${sourceFile ? "AND source_file = ?" : ""} ORDER BY name
+      `).bind(organisationId, actor.person.id, ...(sourceFile ? [sourceFile] : [])).all();
       return Response.json({ recipes: recipes.results }, { headers: { "Cache-Control": "no-store" } });
     }
 
     const recipeMatch = url.pathname.match(/^\/api\/recipes\/([^/]+)$/);
     const slug = recipeMatch ? decodeURIComponent(recipeMatch[1]) : null;
     if (slug && request.method === "DELETE") {
+      const visible = await env.DB.prepare(`SELECT id FROM recipes WHERE slug = ? AND organisation_id = ? AND ${VISIBLE_RECIPE}`).bind(slug, organisationId, actor.person.id).first();
+      if (!visible) return Response.json({ error: "Recipe not found" }, { status: 404 });
       if (!actor.person.admin) return Response.json({ error: "Only admins can delete recipes." }, { status: 403 });
       return deleteRecipe(env, slug, organisationId);
     }
     if (slug && request.method === "GET") {
       const recipe = await env.DB.prepare(`SELECT ${RECIPE_COLUMNS},
         (SELECT name FROM recipe_sections WHERE id = recipes.section_id AND organisation_id = recipes.organisation_id) AS section_name
-        FROM recipes WHERE slug = ? AND organisation_id = ?`).bind(slug, organisationId).first();
+        FROM recipes WHERE slug = ? AND organisation_id = ? AND ${VISIBLE_RECIPE}`).bind(slug, organisationId, actor.person.id).first();
       if (!recipe) return Response.json({ error: "Recipe not found" }, { status: 404 });
       const [ingredients, steps, activity] = await env.DB.batch([
         env.DB.prepare(`SELECT quantity, name, notes, sort_order, section
@@ -357,7 +367,7 @@ export default {
         env.DB.prepare("SELECT * FROM recipe_activity WHERE recipe_id = ? ORDER BY occurred_at, id").bind(recipe.id)
       ]);
       const people = (await env.DB.prepare("SELECT id, name, position, email FROM organisation_users WHERE organisation_id = ?").bind(organisationId).all()).results;
-      return Response.json({ ...recipe, ingredients: ingredients.results.map(row => ({ ...row, quantity: formatIngredientQuantity(row.quantity) })), steps: steps.results, activity: activity.results.map(row => publicActivity(row, people)) }, {
+      return Response.json({ ...recipe, can_manage_privacy: recipe.creator_id === actor.person.id, ingredients: ingredients.results.map(row => ({ ...row, quantity: formatIngredientQuantity(row.quantity) })), steps: steps.results, activity: activity.results.map(row => publicActivity(row, people)) }, {
         headers: { "Cache-Control": "no-store" }
       });
     }

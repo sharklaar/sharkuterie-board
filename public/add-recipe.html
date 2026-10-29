@@ -25,12 +25,22 @@
 
         <form id="recipe-form">
             <section class="recipe-details form-section" aria-labelledby="details-heading">
+                <div class="recipe-details-header">
                 <div class="section-heading">
                     <span class="section-number">01</span>
                     <div>
                         <h2 id="details-heading">Recipe details</h2>
                         <p>Start with a name, then add any useful notes.</p>
                     </div>
+                </div>
+
+                <label class="privacy-option">
+                    <span class="privacy-label">Private recipe
+                        <span id="recipe-private-hint">Only visible to you when on</span>
+                    </span>
+                    <input type="checkbox" role="switch" name="is_private" id="recipe-private" aria-describedby="recipe-private-hint" />
+                    <span class="privacy-switch" aria-hidden="true"></span>
+                </label>
                 </div>
 
                 <div class="recipe-details-grid">

@@ -16,6 +16,8 @@ The organisation foundation was released on 27 October 2026. Recipe sections wer
 
 ## Recipe editor
 
+- [x] Add a “Keep this recipe private” option, with creator-only visibility enforced across recipe APIs, lists, ingredient suggestions and uploaded photos. Implemented and migrated locally; production migration `0011_private_recipes.sql` and deployment pending.
+
 - [x] Remove the redundant Step title and Method section fields from method steps, simplifying step entry around the instruction and optional Why. Existing step titles and sections are preserved when editing or reordering saved recipes. Implemented locally; deployment pending.
 
 ## Release workflow

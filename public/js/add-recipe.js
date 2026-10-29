@@ -316,6 +316,11 @@ async function initialiseEditor() {
     }
     if (recipe) {
       editingSlug = recipe.slug || null;
+      form.elements.namedItem("is_private").checked = Boolean(recipe.is_private);
+      if (!recipe.can_manage_privacy) {
+        document.querySelector(".privacy-option").hidden = true;
+        document.getElementById("recipe-private-hint").hidden = true;
+      }
       sourceFile = recipe.source_file || null;
       for (const name of ["name", "description", "yield", "notes", "section_id"]) {
         form.elements.namedItem(name).value = recipe[name] ?? "";
@@ -412,6 +417,7 @@ form.addEventListener("submit", async (event) => {
     yield: formData.get("yield"),
     notes: formData.get("notes"),
     section_id: formData.get("section_id") || null,
+    is_private: form.elements.namedItem("is_private").checked,
     source_file: sourceFile,
     image_path: currentImagePath,
     remove_image: removeImage,
